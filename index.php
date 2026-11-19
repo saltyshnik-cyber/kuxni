@@ -116,6 +116,8 @@ $formFields = static function () use ($csrf): void { ?>
 .form{display:grid;gap:14px;margin-top:30px;max-width:520px}.fld{display:grid;gap:7px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}.form input,.form select,.form textarea{width:100%;min-height:56px;padding:14px 18px;border-radius:16px;border:1.5px solid var(--line);background:#fff;font-family:var(--sans);font-size:16px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink)}.form textarea{min-height:100px;resize:vertical}.form input:focus,.form select:focus,.form textarea:focus{outline:2px solid var(--oak);outline-offset:2px;border-color:var(--oak)}.form .hp{position:absolute;left:-9999px;width:1px;min-height:0;height:1px;opacity:0;pointer-events:none}.form-note{font-size:14px;min-height:20px;color:var(--muted)}.form-note.err{color:#B0432B}.form-note.ok{color:#2E7D4F}.clist{list-style:none;margin-top:26px;border-top:1px solid var(--line)}.clist li{border-bottom:1px solid var(--line)}.clist a{display:flex;align-items:center;gap:16px;padding:15px 0}.clist .ic{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--forest);color:var(--oak-hi)}.clist small{display:block;font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--oak-dark)}.clist b{display:block;font-size:16.5px;overflow-wrap:anywhere}.mapbtns{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}.mapbtns a{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;font-weight:700;font-size:14.5px;background:var(--forest);color:#fff}.mapbtns a+a{background:transparent;color:var(--ink);border:1.5px solid rgba(16,18,16,.3)}.footer{padding:38px 0 120px;color:rgba(255,255,255,.6);font-size:13.5px;background:#0C0E0C}.footer .container{display:grid;gap:10px}.footer b{font-family:var(--disp);letter-spacing:.14em;color:#fff;font-size:18px}.footer a{color:rgba(255,255,255,.82)}.dock{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;display:flex;gap:10px;padding:10px;border-radius:999px;background:rgba(16,18,16,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.24);box-shadow:0 18px 40px -16px rgba(0,0,0,.8)}.dock .btn{min-height:52px;flex:1;padding:0 18px;font-size:15px}.dock .ico{flex:none;width:52px;min-height:52px;padding:0;color:var(--oak-hi);border:1.5px solid rgba(255,255,255,.38);border-radius:50%;background:transparent;display:grid;place-items:center}.modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(9,11,9,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto}.modal.open{display:flex}.modal .box{width:100%;max-width:480px;background:var(--paper);border-radius:26px;padding:26px 22px;position:relative;box-shadow:0 40px 80px -30px #000;margin:auto}.modal h3{font-family:var(--disp);font-weight:700;text-transform:uppercase;font-size:30px;line-height:1.05}.modal .sub{font-size:14.5px;color:var(--muted);margin-top:8px}.modal .x{position:absolute;top:12px;right:12px;width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);background:transparent;font-size:22px;line-height:1;color:var(--ink)}
 @media (min-width:640px){.hero-btns{grid-template-columns:auto auto;justify-content:start}}
 @media (min-width:960px){:root{--pad:40px}.section{padding:120px 0}.nav{display:flex}.burger{display:none}.brand{flex:0 0 auto;margin-right:auto}.header .tel{display:inline-flex;margin-left:26px;min-height:46px;padding:0 22px;font-size:14.5px}.dock{display:none}.hero{padding:0 0 124px;min-height:100vh;display:flex;align-items:center}.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:56px;align-items:center;padding:120px 40px 0;width:100%;max-width:1200px;margin:0 auto}.hero-photo{order:2;padding-top:0;border-radius:var(--r);overflow:hidden;border:1px solid rgba(255,255,255,.22);box-shadow:0 40px 80px -30px #000}.hero-photo::after{display:none}.hero-content{order:1;margin-top:0;padding:0}.hero h1{font-size:clamp(52px,5.4vw,82px)}.h2{font-size:clamp(56px,6vw,84px)}.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start}.rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:48px}.kgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.kgrid .wide{grid-column:span 2;grid-row:span 2;aspect-ratio:auto}.gal{padding-left:max(40px,calc((100vw - 1200px)/2 + 40px))}.slide{flex-basis:400px}.steps{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.step{flex-direction:column}.revs{padding-left:max(40px,calc((100vw - 1200px)/2 + 40px))}.rev{flex-basis:360px}.footer{padding-bottom:56px}.footer .container{grid-template-columns:1fr auto;align-items:center}}
+body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 25%)!important}
+.bg-dark,.hero{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 25%),radial-gradient(ellipse 70% 40% at 90% 0%,rgba(207,154,98,.2),transparent 70%),radial-gradient(ellipse 60% 40% at 0% 100%,rgba(90,120,100,.18),transparent 70%)!important}
 </style>
 </head>
 <body>
@@ -220,106 +222,4 @@ $formFields = static function () use ($csrf): void { ?>
   <div class="kgrid">
     <figure class="wide">
       <img src="<?= e($photo(10)) ?>" alt="Угловая кухня в белом и графитовом" loading="lazy">
-      <div class="kprice"><small>Под ключ</small><b>от 100 тыс. ₽</b><span>Проект, материалы, фурнитура и монтаж</span></div>
-    </figure>
-    <figure><img src="<?= e($photo(11)) ?>" alt="Кухня с деревянной столешницей" loading="lazy"></figure>
-    <figure><img src="<?= e($photo(12)) ?>" alt="Кухня с фрезерованными фасадами" loading="lazy"></figure>
-    <figure><img src="<?= e($photo(13)) ?>" alt="Кухня с встроенной техникой" loading="lazy"></figure>
-    <figure><img src="<?= e($photo(14)) ?>" alt="Кухня с подсветкой рабочей зоны" loading="lazy"></figure>
-  </div>
-  <div class="score"><b>4.9</b><span>Средняя оценка в 2ГИС и Яндекс Картах. Более 590 проектов в портфолио.</span></div>
-</div></section>
-
-<section class="section sheet bg-paper" id="reviews"><div class="container reveal">
-  <div class="eyebrow">Отзывы</div>
-  <h2 class="h2">Что говорят<em>клиенты</em></h2>
-</div>
-<div class="revs">
-  <?php foreach ($reviews as [$text, $name, $src]): ?>
-  <article class="rev">
-    <div class="stars" aria-label="5 из 5">★★★★★</div>
-    <p><?= e($text) ?></p>
-    <footer><b><?= e($name) ?></b><?= e($src) ?></footer>
-  </article>
-  <?php endforeach; ?>
-</div>
-<div class="container"><p class="hint" style="color:var(--muted)">Отзывы клиентов из 2ГИС и Яндекс Карт.</p></div>
-</section>
-
-<section class="section sheet bg-dark on-dark" id="how"><div class="container reveal">
-  <div class="eyebrow">Как мы работаем</div>
-  <h2 class="h2">Три шага<em>до кухни</em></h2>
-  <div class="steps">
-    <?php foreach ($steps as $i => [$title, $desc]): ?>
-    <div class="step">
-      <span class="n"><?= $i + 1 ?></span>
-      <div><h3><?= e($title) ?></h3><p><?= e($desc) ?></p></div>
-    </div>
-    <?php endforeach; ?>
-  </div>
-</div></section>
-
-<section class="section sheet bg-paper" id="lead"><div class="container reveal">
-  <div class="eyebrow">Заявка</div>
-  <h2 class="h2">Рассчитать<em>стоимость</em></h2>
-  <p class="lead">Оставьте имя и телефон — Ксения перезвонит, задаст пару вопросов и пришлёт расчёт. Без навязчивых звонков.</p>
-  <form class="form js-lead" method="post" action="api/submit.php" novalidate>
-    <?php $formFields(); ?>
-  </form>
-</div></section>
-
-<section class="section sheet bg-stone" id="contacts"><div class="container reveal">
-  <div class="eyebrow">Контакты</div>
-  <h2 class="h2">Ксения<em>на связи</em></h2>
-  <p class="lead">Менеджер производства. Пишите в любой мессенджер — ответим в рабочее время.</p>
-  <ul class="clist">
-    <?php foreach ($contacts as [$label, $value, $href, $key]): ?>
-    <li><a href="<?= e($href) ?>"<?= str_starts_with($href, 'http') ? ' target="_blank" rel="noopener"' : '' ?>><span class="ic"><?= $icon($key) ?></span><span><small><?= e($label) ?></small><b><?= e($value) ?></b></span></a></li>
-    <?php endforeach; ?>
-  </ul>
-  <div class="mapbtns">
-    <a href="https://yandex.ru/maps/?text=<?= rawurlencode('Краснодар, улица Конечная, 2') ?>" target="_blank" rel="noopener">Яндекс Карты</a>
-    <a href="https://2gis.ru/krasnodar/search/<?= rawurlencode('Конечная 2') ?>" target="_blank" rel="noopener">2ГИС</a>
-  </div>
-</div></section>
-</main>
-
-<footer class="footer"><div class="container">
-  <div><b>MEBELS.KRD</b><div>Кухни, шкафы и мебель на заказ · Краснодар, ул. Конечная 2, 2 этаж</div></div>
-  <div><a href="tel:+79180892254">+7 (918) 089-22-54</a> · пн–сб 9:00–17:00 · © <?= date('Y') ?></div>
-</div></footer>
-
-<div class="dock">
-  <button class="btn btn-oak" type="button" data-modal-open>Рассчитать стоимость</button>
-  <a class="ico btn" href="tel:+79180892254" aria-label="Позвонить"><?= $phoneBtn ?></a>
-  <a class="ico btn" href="<?= e($waLink) ?>" target="_blank" rel="noopener" aria-label="WhatsApp"><?= $waBtn ?></a>
-</div>
-
-<div class="modal" id="leadModal" role="dialog" aria-modal="true" aria-labelledby="leadModalTitle">
-  <div class="box">
-    <button class="x" type="button" data-modal-close aria-label="Закрыть">&times;</button>
-    <h3 id="leadModalTitle">Рассчитать стоимость</h3>
-    <p class="sub">Перезвоним в течение рабочего дня и посчитаем проект.</p>
-    <form class="form js-lead" method="post" action="api/submit.php" novalidate>
-      <?php $formFields(); ?>
-    </form>
-  </div>
-</div>
-
-<script>
-(function () {
-  var hdr = document.getElementById('hdr');
-  var onScroll = function () { hdr.classList.toggle('scrolled', window.scrollY > 40); };
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
-
-  var menu = document.getElementById('menu');
-  var lock = function (on) { document.body.style.overflow = on ? 'hidden' : ''; };
-  var menuOpen = function (on) { menu.classList.toggle('open', on); lock(on); };
-  document.querySelectorAll('[data-menu-open]').forEach(function (b) {
-    b.addEventListener('click', function () { menuOpen(true); });
-  });
-  document.querySelectorAll('[data-menu-close]').forEach(function (b) {
-    b.addEventListener('click', function () { menuOpen(false); });
-  });
-  menu.
+      <div class="kprice"><small>Под ключ</small><b>от
