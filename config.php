@@ -6,8 +6,8 @@ date_default_timezone_set('Europe/Moscow');
 /* ---------- Настройки ---------- */
 const SITE_NAME      = 'Mebels.krd';
 const ADMIN_PASSWORD = 'admin123';                  // смените на хостинге
-const ADMIN_EMAIL    = 'info@mebels-krd.ru';        // куда приходят заявки
-const MAIL_FROM      = 'no-reply@mebels-krd.ru';    // ящик на домене сайта
+const ADMIN_EMAIL    = 'kzotova84@mail.ru';         // куда приходят заявки
+const MAIL_FROM      = '';                          // пусто — возьмётся домен сайта
 const MAIL_FROM_NAME = 'Mebels.krd';
 
 const APP_ROOT     = __DIR__;
@@ -267,8 +267,21 @@ function leads_from_ip(string $ip, int $seconds = 3600): int
     return $count;
 }
 
+function mail_from_address(): string
+{
+    if (MAIL_FROM !== '') {
+        return MAIL_FROM;
+    }
+
+    $host = (string)($_SERVER['SERVER_NAME'] ?? 'localhost');
+
+    return 'no-reply@' . preg_replace('/^www\./', '', $host);
+}
+
 function send_lead_mail(array $lead): bool
 {
+    $from = mail_from_address();
+
     $body = "Новая заявка с сайта\n\n"
         . 'Имя: ' . $lead['name'] . "\n"
         . 'Телефон: ' . $lead['phone'] . "\n"
@@ -281,8 +294,8 @@ function send_lead_mail(array $lead): bool
         'MIME-Version: 1.0',
         'Content-Type: text/plain; charset=UTF-8',
         'Content-Transfer-Encoding: 8bit',
-        'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
-        'Reply-To: ' . MAIL_FROM,
+        'From: ' . MAIL_FROM_NAME . ' <' . $from . '>',
+        'Reply-To: ' . $from,
         'X-Mailer: PHP/' . PHP_VERSION,
     ];
 
