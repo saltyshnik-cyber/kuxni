@@ -3,16 +3,11 @@ require __DIR__ . '/config.php';
 start_session();
 
 $photos = glob(__DIR__ . '/uploads/*.{jpg,jpeg,jfif,png,webp,JPG,JPEG,JFIF,PNG,WEBP}', GLOB_BRACE) ?: [];
-$photoUrls = array_map(static fn($path) => 'uploads/' . rawurlencode(basename($path)), $photos);
+$photoUrls = array_map(static fn(string $path): string => 'uploads/' . rawurlencode(basename($path)), $photos);
 
 $photo = static function (int $index) use ($photoUrls): string {
     return $photoUrls ? $photoUrls[$index % count($photoUrls)] : 'uploads/placeholder.jpg';
 };
-
-function e($value): string
-{
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-}
 
 $defaults = [
     'phone'     => '+7 (918) 089-22-54',
@@ -23,15 +18,14 @@ $defaults = [
     'address'   => 'г. Краснодар, ул. Конечная 2 (район Энка), 2 этаж',
 ];
 
-$contentFile = __DIR__ . '/data/content.json';
-$content = is_file($contentFile) ? json_decode((string)file_get_contents($contentFile), true) : [];
+$content  = is_file(CONTENT_FILE) ? json_decode((string)file_get_contents(CONTENT_FILE), true) : [];
 $contacts = array_merge($defaults, is_array($content['contacts'] ?? null) ? $content['contacts'] : []);
 
 $phoneDigits = preg_replace('/\D/', '', $contacts['phone']);
-$telHref = '+' . $phoneDigits;
-$waText = rawurlencode('Здравствуйте! Хочу рассчитать мебель на заказ.');
-$waHref = 'https://wa.me/' . $phoneDigits . '?text=' . $waText;
-$addressQuery = rawurlencode($contacts['address']);
+$telHref     = 'tel:+' . $phoneDigits;
+$waHref      = 'https://wa.me/' . $phoneDigits . '?text=' . rawurlencode('Здравствуйте! Хочу рассчитать мебель на заказ.');
+$mapQuery    = rawurlencode($contacts['address']);
+$csrf        = csrf_token();
 ?>
 <!doctype html>
 <html lang="ru">
@@ -276,4 +270,26 @@ button.btn{border:0;cursor:pointer;font-family:inherit}
   <li><a href="#reviews"><span>04</span>Отзывы</a></li>
   <li><a href="#contacts"><span>05</span>Контакты</a></li>
  </ol>
- <div class="btns"><button class="btn btn-oak" type="button" data-open-lead><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1.2-4A8 8 0 1 1 8 18.8Z"/><path d="M9 9c0 3 3 6 6 6l1.2-1.6-2-1-1 .6c-.8-.4-1.6-1.2-2-2l.6-1-1-2Z"/></svg> Заявка на просчёт
+ <div class="btns">
+  <button class="btn btn-oak" type="button" data-open-lead><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1.2-4A8 8 0 1 1 8 18.8Z"/><path d="M9 9c0 3 3 6 6 6l1.2-1.6-2-1-1 .6c-.8-.4-1.6-1.2-2-2l.6-1-1-2Z"/></svg> Заявка на просчёт</button>
+  <a class="btn btn-glass" href="<?= e($telHref) ?>"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg> <?= e($contacts['phone']) ?></a>
+ </div>
+ <p><?= e($contacts['address']) ?> · пн–сб 9:00–17:00</p>
+</div></div>
+
+<main id="top">
+<section class="hero"><div class="wrap">
+ <div class="hero-photo"><img src="<?= e($photo(0)) ?>" alt="Шкаф-прихожая в матовом зелёном фасаде и дубе" width="960" height="1195"></div>
+ <div class="hero-content container">
+  <p class="kick">Кухни · Шкафы · Прихожие</p>
+  <h1>Мебель на заказ<em>в Краснодаре</em></h1>
+  <p class="sub">Крупное мебельное производство. Сохраним вам нервы, время и деньги.</p>
+  <div class="hero-btns"><button class="btn btn-oak" type="button" data-open-lead><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1.2-4A8 8 0 1 1 8 18.8Z"/><path d="M9 9c0 3 3 6 6 6l1.2-1.6-2-1-1 .6c-.8-.4-1.6-1.2-2-2l.6-1-1-2Z"/></svg> Оставить заявку на просчёт</button><a class="btn btn-glass" href="<?= e($telHref) ?>"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg> Позвонить</a></div>
+  <div class="hfacts"><div><b>от 100 тыс.</b><span>кухни, ₽</span></div><div><b>6 дней</b><span>в неделю на связи</span></div><div><b>под ключ</b><span>проект и монтаж</span></div></div>
+ </div>
+</div></section>
+
+<section class="section sheet bg-paper" id="about"><div class="container reveal">
+ <div class="about-grid"><div>
+  <div class="eyebrow">О нас</div>
+  <h2 class="h2">Мебель
