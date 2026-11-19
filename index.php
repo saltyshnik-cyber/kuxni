@@ -28,6 +28,8 @@ $slides = [
     'Прихожая с зеркалом и комодом',
 ];
 
+$slides = array_slice($slides, 0, -3);
+
 $kinds = [
     ['01', 'Кухни', 'Проект с менеджером, подбор фурнитуры, подсветка рабочей зоны.', 'от 100 тыс. ₽'],
     ['02', 'Шкафы и купе', 'Распашные и купе, зеркала, стеллажи, фасады с фрезеровкой.', ''],
@@ -328,6 +330,4 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
   });
 
   var modal = document.getElementById('leadModal');
-  var modalOpen = function (on) {
-    modal.classList.toggle('open', on);
-    lock
+  var modal
