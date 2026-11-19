@@ -11,7 +11,7 @@ $realPhotos = array_map(
 );
 
 $fallbackPhoto = 'data:image/svg+xml;charset=utf-8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#26302A"/><text x="400" y="512" font-family="sans-serif" font-size="38" fill="#CF9A62" text-anchor="middle">MEBELS.KRD</text></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#26302A"/></svg>'
 );
 
 $photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $realPhotos[$i % count($realPhotos)];
@@ -126,7 +126,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
 <header class="header" id="hdr"><div class="container">
   <a class="brand" href="#top"><span class="mark">MK</span><span><b>MEBELS.KRD</b><small>Мебель на заказ · Краснодар</small></span></a>
   <nav class="nav"><a href="#works">Работы</a><a href="#kinds">Что делаем</a><a href="#kitchens">Кухни</a><a href="#reviews">Отзывы</a><a href="#contacts">Контакты</a></nav>
-  <a class="btn btn-oak tel" href="#lead" data-modal-open>Заявка на просчёт</a>
+  <button class="btn btn-oak tel" type="button" data-modal-open>Заявка на просчёт</button>
   <button class="burger" type="button" data-menu-open aria-label="Меню"><i></i></button>
 </div></header>
 
@@ -156,7 +156,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <h1>Мебель на заказ<em>в Краснодаре</em></h1>
     <p class="sub">Крупное мебельное производство. Сохраним вам нервы, время и деньги.</p>
     <div class="hero-btns">
-      <button class="btn btn-oak" type="button" data-modal-open><?= $waBtn ?> Оставить заявку на просчёт</button>
+      <button class="btn btn-oak" type="button" data-modal-open>Оставить заявку на просчёт</button>
       <a class="btn btn-glass" href="tel:+79180892254"><?= $phoneBtn ?> Позвонить</a>
     </div>
     <div class="hfacts">
@@ -298,36 +298,4 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
   <a class="ico btn" href="<?= e($waLink) ?>" target="_blank" rel="noopener" aria-label="WhatsApp"><?= $waBtn ?></a>
 </div>
 
-<div class="modal" id="leadModal" role="dialog" aria-modal="true" aria-labelledby="leadModalTitle">
-  <div class="box">
-    <button class="x" type="button" data-modal-close aria-label="Закрыть">&times;</button>
-    <h3 id="leadModalTitle">Рассчитать стоимость</h3>
-    <p class="sub">Перезвоним в течение рабочего дня и посчитаем проект.</p>
-    <form class="form js-lead" method="post" action="api/submit.php" novalidate>
-      <?php $formFields(); ?>
-    </form>
-  </div>
-</div>
-
-<script>
-(function () {
-  var hdr = document.getElementById('hdr');
-  var onScroll = function () { hdr.classList.toggle('scrolled', window.scrollY > 40); };
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
-
-  var menu = document.getElementById('menu');
-  var lock = function (on) { document.body.style.overflow = on ? 'hidden' : ''; };
-  var menuOpen = function (on) { menu.classList.toggle('open', on); lock(on); };
-  document.querySelectorAll('[data-menu-open]').forEach(function (b) {
-    b.addEventListener('click', function () { menuOpen(true); });
-  });
-  document.querySelectorAll('[data-menu-close]').forEach(function (b) {
-    b.addEventListener('click', function () { menuOpen(false); });
-  });
-  menu.querySelectorAll('a').forEach(function (a) {
-    a.addEventListener('click', function () { menuOpen(false); });
-  });
-
-  var modal = document.getElementById('leadModal');
-  var modal
+<div class="modal" id="leadModal" role="dialog" aria-
