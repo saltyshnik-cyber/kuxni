@@ -23,7 +23,6 @@ $wa      = (string)$ct['whatsapp'];
 $mailto  = 'mailto:' . $ct['email'];
 $manager = (string)($ct['manager'] ?? '');
 $csrf    = csrf_token();
-$sent    = (string)($_GET['sent'] ?? '');
 $allFiles = upload_files();
 
 /* Кухни: три слота, при пустом — подставляем свободный файл, чтобы не было дыр. */
@@ -167,7 +166,7 @@ section[id]{scroll-margin-top:84px}
 .bg-stone{background:radial-gradient(ellipse 80% 50% at 15% 0%,rgba(255,255,255,.55),transparent 70%),repeating-linear-gradient(90deg,rgba(255,255,255,.5) 0 1.4px,transparent 1.4px 11px),var(--stone)}
 .reveal{opacity:1;transform:none}
 
-.header{position:fixed;top:0;left:0;right:0;z-index:50;padding:12px 0;background:rgba(16,18,16,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.12);color:#fff;transition:background .3s,color .3s}
+.header{position:fixed;top:0;left:0;right:0;z-index:110;padding:12px 0;background:rgba(16,18,16,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.12);color:#fff;transition:background .3s,color .3s}
 .header .container{display:flex;align-items:center;gap:12px}
 .brand{display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto}
 .mark{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:.04em;color:var(--oak-hi);background:var(--forest2);border:1.5px solid rgba(237,197,147,.55)}
@@ -185,7 +184,7 @@ section[id]{scroll-margin-top:84px}
 .header.scrolled .brand small{color:var(--muted)}
 .header.scrolled .burger{border-color:rgba(16,18,16,.3)}
 
-.menu{position:fixed;inset:0;z-index:100;background:#101210;color:#fff;padding:14px 0 28px;display:none;overflow:auto}
+.menu{position:fixed;inset:0;z-index:150;background:#101210;color:#fff;padding:14px 0 28px;display:none;overflow:auto}
 .menu:target{display:block}
 .menu .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .menu .x{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;border:1.5px solid rgba(255,255,255,.4);font-size:22px;line-height:1;flex:none}
@@ -195,7 +194,7 @@ section[id]{scroll-margin-top:84px}
 .menu .btns{display:grid;gap:12px;margin-top:24px}
 .menu p{font-size:14px;color:rgba(255,255,255,.62);margin-top:18px;line-height:1.6}
 
-.hero{position:relative;background:#111411;color:#fff;overflow:hidden;padding-bottom:88px}
+.hero{position:relative;background:#111411;color:#fff;overflow:hidden;padding-bottom:88px;z-index:1}
 .hero-photo{position:relative;padding-top:62px;overflow:hidden}
 .hero-photo img{width:100%;max-height:78vh;min-height:320px;object-fit:cover}
 .hero-photo .noimg{aspect-ratio:4/5}
@@ -310,25 +309,24 @@ section[id]{scroll-margin-top:84px}
 .socials a i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:10.5px;letter-spacing:.04em;background:var(--forest);color:var(--oak-hi)}
 .ccard.dark .socials a,.menu .socials a{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff}
 
-.footer{padding:38px 0 130px;background:#101210;color:rgba(255,255,255,.6);font-size:13.5px}
+.footer{position:relative;padding:38px 0 150px;background:#101210;color:rgba(255,255,255,.6);font-size:13.5px}
 .footer .container{display:grid;gap:10px}
 .footer b{font-family:var(--disp);letter-spacing:.14em;color:#fff;font-size:18px}
 
-.dock{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;display:flex;gap:10px;padding:10px;border-radius:999px;background:rgba(16,18,16,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.24);box-shadow:0 18px 40px -16px rgba(0,0,0,.8)}
-.dock .btn{min-height:52px;flex:1;padding:0 18px;font-size:15px}
-.dock .ico{flex:none;width:52px;min-height:52px;display:grid;place-items:center;color:var(--oak-hi);border:1.5px solid rgba(255,255,255,.38);border-radius:50%;background:transparent;cursor:pointer}
+.dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));z-index:120;width:min(680px,calc(100% - 24px));display:flex;gap:8px;padding:9px;border-radius:999px;background:rgba(16,18,16,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.22);box-shadow:0 22px 48px -18px rgba(0,0,0,.92),inset 0 1px 0 rgba(255,255,255,.12)}
+.dock .btn{min-height:52px;flex:1;padding:0 16px;font-size:14.5px}
+.dock .ico{flex:none;width:52px;min-height:52px;display:grid;place-items:center;color:var(--oak-hi);border:1.5px solid rgba(255,255,255,.34);border-radius:50%;background:rgba(255,255,255,.07);cursor:pointer}
 .dock .ico svg{width:20px;height:20px}
 
-.modal{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(8,10,9,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto}
+.modal{position:fixed;inset:0;z-index:180;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(8,10,9,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto}
 .modal.open{display:flex}
 .modal .sheet{width:100%;max-width:430px;background:var(--forest);color:#fff;border-radius:24px;padding:24px 20px;border:1px solid rgba(237,197,147,.3);box-shadow:0 40px 90px -30px #000;position:relative;margin:auto}
 .modal h2{font-family:var(--disp);font-weight:600;text-transform:uppercase;font-size:26px;line-height:1.1}
 .modal .sub{font-size:14px;color:rgba(245,241,234,.7);margin-top:8px}
 .modal .x{position:absolute;top:14px;right:14px;width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(255,255,255,.34);background:transparent;color:#fff;font-size:18px;line-height:1;cursor:pointer}
 .modal .x:hover{border-color:var(--oak)}
-.modal .leadcard{padding:0;box-shadow:none;background:transparent}
 
-.toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));z-index:200;display:flex;align-items:center;gap:14px;max-width:calc(100% - 32px);width:max-content;padding:14px 20px;border-radius:20px;background:#16211B;color:#fff;border:1px solid rgba(237,197,147,.5);box-shadow:0 24px 60px -20px #000;opacity:0;pointer-events:none;transform:translate(-50%,18px);transition:opacity .35s,transform .35s}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));z-index:200;display:flex;align-items:center;gap:14px;max-width:calc(100% - 32px);width:max-content;padding:14px 20px;border-radius:20px;background:#16211B;color:#fff;border:1px solid rgba(237,197,147,.5);box-shadow:0 24px 60px -20px #000;opacity:0;pointer-events:none;transform:translate(-50%,18px);transition:opacity .35s,transform .35s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast .ti{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--oak-hi),var(--oak));color:#1B1209;font-weight:700}
 .toast b{display:block;font-size:15.5px}
@@ -338,6 +336,11 @@ section[id]{scroll-margin-top:84px}
 
 .noimg{display:grid;place-items:center;width:100%;height:100%;min-height:190px;background:repeating-linear-gradient(45deg,#26302A,#26302A 12px,#1F2723 12px,#1F2723 24px);color:rgba(237,197,147,.72);font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;line-height:1.6;text-align:center}
 
+/* Объёмный статичный нахлёст секций */
+.stack{position:relative;margin-top:-28px;padding-top:64px;border-radius:30px 30px 0 0;box-shadow:0 -16px 40px rgba(0,0,0,.42);z-index:var(--z,2)}
+.stack.bg-dark{border-top:1px solid rgba(255,255,255,.14)}
+.stack.bg-paper,.stack.bg-stone{border-top:1px solid rgba(255,255,255,.7)}
+
 @media (min-width:640px){
  .hero-btns{grid-template-columns:auto auto;justify-content:start}
  .leadcard{padding:30px}
@@ -345,12 +348,10 @@ section[id]{scroll-margin-top:84px}
 }
 @media (min-width:960px){
  :root{--pad:40px}
- .section{padding:120px 0}
  .nav{display:flex}
  .burger{display:none}
  .brand{flex:0 0 auto;margin-right:auto}
  .header .tel{display:inline-flex;margin-left:26px;min-height:46px;padding:0 22px;font-size:14.5px}
- .dock{display:none}
  .hero{padding:0 0 120px;min-height:100vh;display:flex;align-items:center}
  .hero .wrap{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:56px;align-items:center;padding:130px 40px 0;width:100%;max-width:1200px;margin:0 auto}
  .hero-photo{order:2;padding-top:0;border-radius:var(--r);border:1px solid rgba(255,255,255,.22);box-shadow:0 40px 80px -30px #000;height:min(72vh,640px)}
@@ -372,7 +373,7 @@ section[id]{scroll-margin-top:84px}
  .rev{flex-basis:360px}
  .cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
  .lead-grid{grid-template-columns:1fr 1.05fr;gap:56px;align-items:start;margin-top:44px}
- .toast{bottom:32px}
+ .stack{padding-top:80px;padding-bottom:120px}
 }
 </style>
 </head>
@@ -433,14 +434,14 @@ section[id]{scroll-margin-top:84px}
   </div>
 </section>
 
-<section class="section bg-paper" id="about">
+<section class="section bg-paper stack reveal" id="about" style="--z:2">
   <div class="container">
     <div class="about-grid">
-      <div class="reveal">
+      <div>
         <p class="eyebrow"><?= e($about['eyebrow']) ?></p>
         <h2 class="h2"><?= e($about['title']) ?><em><?= e($about['title_accent']) ?></em></h2>
       </div>
-      <div class="reveal">
+      <div>
         <div class="about-facts"><?= facts_html($about['facts']) ?></div>
         <?php foreach ($about['body'] as $paragraph): ?>
         <p class="about-p"><?= e((string)$paragraph) ?></p>
@@ -450,13 +451,11 @@ section[id]{scroll-margin-top:84px}
   </div>
 </section>
 
-<section class="section bg-dark on-dark" id="works">
+<section class="section bg-dark on-dark stack reveal" id="works" style="--z:3">
   <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($gal['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($gal['title']) ?><em><?= e($gal['title_accent']) ?></em></h2>
-      <p class="lead"><?= e($gal['lead']) ?></p>
-    </div>
+    <p class="eyebrow"><?= e($gal['eyebrow']) ?></p>
+    <h2 class="h2"><?= e($gal['title']) ?><em><?= e($gal['title_accent']) ?></em></h2>
+    <p class="lead"><?= e($gal['lead']) ?></p>
   </div>
   <div class="gal">
     <?php foreach ($freeFiles as $index => $file): ?>
@@ -469,13 +468,11 @@ section[id]{scroll-margin-top:84px}
   <div class="container"><p class="hint"><?= e($gal['hint']) ?></p></div>
 </section>
 
-<section class="section bg-stone" id="services">
+<section class="section bg-stone stack reveal" id="services" style="--z:4">
   <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($works['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($works['title']) ?><em><?= e($works['title_accent']) ?></em></h2>
-      <p class="lead"><?= e($works['lead']) ?></p>
-    </div>
+    <p class="eyebrow"><?= e($works['eyebrow']) ?></p>
+    <h2 class="h2"><?= e($works['title']) ?><em><?= e($works['title_accent']) ?></em></h2>
+    <p class="lead"><?= e($works['lead']) ?></p>
     <div class="rows">
       <?php foreach ($works['items'] as $index => $item): ?>
       <div class="row">
@@ -493,13 +490,11 @@ section[id]{scroll-margin-top:84px}
   </div>
 </section>
 
-<section class="section bg-dark on-dark" id="kitchens">
+<section class="section bg-dark on-dark stack reveal" id="kitchens" style="--z:5">
   <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($kit['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($kit['title']) ?><em><?= e($kit['title_accent']) ?></em></h2>
-      <p class="lead"><?= e($kit['lead']) ?></p>
-    </div>
+    <p class="eyebrow"><?= e($kit['eyebrow']) ?></p>
+    <h2 class="h2"><?= e($kit['title']) ?><em><?= e($kit['title_accent']) ?></em></h2>
+    <p class="lead"><?= e($kit['lead']) ?></p>
     <div class="kgrid">
       <?php foreach ($kit['items'] as $index => $item):
           $photo = $kitchenPhotos[$index] ?? '';
@@ -519,13 +514,11 @@ section[id]{scroll-margin-top:84px}
   </div>
 </section>
 
-<section class="section bg-paper" id="reviews">
+<section class="section bg-paper stack reveal" id="reviews" style="--z:6">
   <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($revs['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($revs['title']) ?></h2>
-    </div>
-    <div class="score reveal">
+    <p class="eyebrow"><?= e($revs['eyebrow']) ?></p>
+    <h2 class="h2"><?= e($revs['title']) ?></h2>
+    <div class="score">
       <b><?= e($revs['score_value']) ?></b>
       <span><?= e($revs['score_text']) ?></span>
     </div>
@@ -544,12 +537,10 @@ section[id]{scroll-margin-top:84px}
   </div>
 </section>
 
-<section class="section bg-dark on-dark" id="steps">
+<section class="section bg-dark on-dark stack reveal" id="steps" style="--z:7">
   <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($steps['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($steps['title']) ?><em><?= e($steps['title_accent']) ?></em></h2>
-    </div>
+    <p class="eyebrow"><?= e($steps['eyebrow']) ?></p>
+    <h2 class="h2"><?= e($steps['title']) ?><em><?= e($steps['title_accent']) ?></em></h2>
     <div class="steps">
       <?php foreach ($steps['items'] as $index => $item): ?>
       <div class="step">
@@ -564,13 +555,14 @@ section[id]{scroll-margin-top:84px}
   </div>
 </section>
 
-<section class="section bg-paper" id="lead">
+<section class="section bg-paper stack reveal" id="lead" style="--z:8">
   <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($form['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($form['title']) ?><em><?= e($form['title_accent']) ?></em></h2>
-      <p class="lead"><?= e($form['lead']) ?></p>
-    </div>
+    <p class="eyebrow"><?= e($form['eyebrow']) ?></p>
+    <h2 class="h2"><?= e($form['title']) ?><em><?= e($form['title_accent']) ?></em></h2>
+    <p class="lead"><?= e($form['lead']) ?></p>
     <div class="lead-grid">
-      <div class="reveal">
+      <div>
         <div class="clist">
+          <a href="<?= e($tel) ?>">
+            <span class="ic">☎</span>
+            <span><small>По
