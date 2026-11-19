@@ -16,13 +16,16 @@ const UPLOADS_DIR  = APP_ROOT . '/uploads';
 const CONTENT_FILE = DATA_DIR . '/content.json';
 const LEADS_FILE   = DATA_DIR . '/leads.json';
 
+/** .jfif — тот же JPEG, просто другое расширение. */
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'jfif', 'png', 'webp'];
+
 const LEAD_STATUSES = [
     'new'    => 'Новая',
     'inwork' => 'В работе',
     'done'   => 'Завершена',
 ];
 
-/** Слоты фотографий на странице: порядок = порядок файлов в uploads/. */
+/** Слоты фотографий: 9 слотов ровно под 9 файлов в uploads/. */
 const PHOTO_SLOTS = [
     'hero' => 'Первый экран',
     'g1'   => 'Работы — 1',
@@ -30,16 +33,9 @@ const PHOTO_SLOTS = [
     'g3'   => 'Работы — 3',
     'g4'   => 'Работы — 4',
     'g5'   => 'Работы — 5',
-    'g6'   => 'Работы — 6',
-    'g7'   => 'Работы — 7',
-    'g8'   => 'Работы — 8',
-    'g9'   => 'Работы — 9',
     'k1'   => 'Кухни — большая',
     'k2'   => 'Кухни — 2',
     'k3'   => 'Кухни — 3',
-    'k4'   => 'Кухни — 4',
-    'k5'   => 'Кухни — 5',
-    'cta'  => 'Фон блока «Заявка»',
 ];
 
 /* ---------- Базовые помощники ---------- */
@@ -58,13 +54,47 @@ function redirect(string $url): never
 function ensure_data_dir(): void
 {
     foreach ([DATA_DIR, UPLOADS_DIR] as $dir) {
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new RuntimeException('Не удалось создать папку ' . basename($dir));
         }
     }
     if (!is_file(LEADS_FILE)) {
         @file_put_contents(LEADS_FILE, "[]\n", LOCK_EX);
     }
+}
+
+function phone_ok(string $phone): bool
+{
+    $digits = preg_replace('/\D+/', '', $phone);
+
+    return $digits !== null && mb_strlen($digits) >= 10 && mb_strlen($digits) <= 15;
+}
+
+/* ---------- CSRF и сессия ---------- */
+
+function start_session(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+}
+
+function csrf_token(): string
+{
+    start_session();
+    if (empty($_SESSION['csrf'])) {
+        $_SESSION['csrf'] = bin2hex(random_bytes(16));
+    }
+
+    return $_SESSION['csrf'];
+}
+
+function csrf_ok(?string $token): bool
+{
+    start_session();
+
+    return is_string($token) && $token !== '' && !empty($_SESSION['csrf'])
+        && hash_equals($_SESSION['csrf'], $token);
 }
 
 /* ---------- Контент ---------- */
@@ -90,6 +120,76 @@ function save_content(array $data): bool
     return $json !== false && @file_put_contents(CONTENT_FILE, $json . "\n", LOCK_EX) !== false;
 }
 
+/** Путь вида "hero.title" -> значение (или '' если нет). */
+function get_path(array $data, string $path): mixed
+{
+    foreach (explode('.', $path) as $key) {
+        if (!is_array($data) || !array_key_exists($key, $data)) {
+            return '';
+        }
+        $data = $data[$key];
+    }
+
+    return $data;
+}
+
+function set_path(array &$data, string $path, mixed $value): void
+{
+    $keys = explode('.', $path);
+    $last = (string)array_pop($keys);
+    $ref  = &$data;
+
+    foreach ($keys as $key) {
+        if (!isset($ref[$key]) || !is_array($ref[$key])) {
+            $ref[$key] = [];
+        }
+        $ref = &$ref[$key];
+    }
+
+    $ref[$last] = $value;
+}
+
+/** Строки «поле | поле» -> список записей. */
+function lines_to_items(string $text, array $keys): array
+{
+    $items = [];
+    foreach (preg_split('/\R/u', $text) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        $parts = array_map('trim', explode('|', $line, count($keys)));
+        $item  = [];
+        foreach ($keys as $index => $key) {
+            $item[$key] = $parts[$index] ?? '';
+        }
+        $items[] = $item;
+    }
+
+    return $items;
+}
+
+function items_to_lines(array $items, array $keys): string
+{
+    $lines = [];
+    foreach ($items as $item) {
+        $row = [];
+        foreach ($keys as $key) {
+            $row[] = (string)($item[$key] ?? '');
+        }
+        $lines[] = implode(' | ', $row);
+    }
+
+    return implode("\n", $lines);
+}
+
+function plain_lines(string $text): array
+{
+    $lines = array_map('trim', preg_split('/\R/u', $text) ?: []);
+
+    return array_values(array_filter($lines, static fn(string $line): bool => $line !== ''));
+}
+
 /* ---------- Заявки ---------- */
 
 function leads(): array
@@ -97,36 +197,33 @@ function leads(): array
     if (!is_file(LEADS_FILE)) {
         return [];
     }
-    $raw   = (string)@file_get_contents(LEADS_FILE);
-    $leads = json_decode($raw, true);
+    $data = json_decode((string)@file_get_contents(LEADS_FILE), true);
 
-    return is_array($leads) ? $leads : [];
+    return is_array($data) ? $data : [];
+}
+
+function save_leads(array $leads): void
+{
+    ensure_data_dir();
+    $json = json_encode($leads, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    $handle = fopen(LEADS_FILE, 'c+');
+    if ($handle === false || $json === false) {
+        throw new RuntimeException('Не удалось записать data/leads.json');
+    }
+    flock($handle, LOCK_EX);
+    ftruncate($handle, 0);
+    rewind($handle);
+    fwrite($handle, $json . "\n");
+    fflush($handle);
+    flock($handle, LOCK_UN);
+    fclose($handle);
 }
 
 function add_lead(array $lead): void
 {
-    ensure_data_dir();
-    $handle = fopen(LEADS_FILE, 'c+');
-    if ($handle === false) {
-        throw new RuntimeException('Не удалось открыть data/leads.json');
-    }
-
-    flock($handle, LOCK_EX);
-    $raw   = (string)stream_get_contents($handle);
-    $leads = json_decode($raw, true);
-    $leads = is_array($leads) ? $leads : [];
-
+    $leads = leads();
     array_unshift($leads, $lead);
-    $leads = array_slice($leads, 0, 5000);
-
-    $json = json_encode($leads, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-
-    ftruncate($handle, 0);
-    rewind($handle);
-    fwrite($handle, (string)$json . "\n");
-    fflush($handle);
-    flock($handle, LOCK_UN);
-    fclose($handle);
+    save_leads(array_slice($leads, 0, 5000));
 }
 
 function update_lead_status(string $id, string $status): void
@@ -137,28 +234,42 @@ function update_lead_status(string $id, string $status): void
     $leads = leads();
     foreach ($leads as &$lead) {
         if (($lead['id'] ?? '') === $id) {
-            $lead['status'] = $status;
+            $lead['status']     = $status;
             $lead['updated_at'] = date('Y-m-d H:i:s');
             break;
         }
     }
     unset($lead);
-
-    $json = json_encode($leads, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-    @file_put_contents(LEADS_FILE, (string)$json . "\n", LOCK_EX);
+    save_leads($leads);
 }
 
 function delete_lead(string $id): void
 {
-    $leads = array_values(array_filter(leads(), static fn(array $l): bool => ($l['id'] ?? '') !== $id));
-    $json  = json_encode($leads, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-    @file_put_contents(LEADS_FILE, (string)$json . "\n", LOCK_EX);
+    save_leads(array_values(array_filter(
+        leads(),
+        static fn(array $lead): bool => ($lead['id'] ?? '') !== $id
+    )));
+}
+
+function leads_from_ip(string $ip, int $seconds = 3600): int
+{
+    $limit = time() - $seconds;
+    $count = 0;
+    foreach (leads() as $lead) {
+        if (($lead['ip'] ?? '') !== $ip) {
+            continue;
+        }
+        if (strtotime((string)($lead['created_at'] ?? '')) > $limit) {
+            $count++;
+        }
+    }
+
+    return $count;
 }
 
 function send_lead_mail(array $lead): bool
 {
-    $subject = 'Заявка с сайта ' . SITE_NAME;
-    $body    = "Новая заявка с сайта\n\n"
+    $body = "Новая заявка с сайта\n\n"
         . 'Имя: ' . $lead['name'] . "\n"
         . 'Телефон: ' . $lead['phone'] . "\n"
         . 'Услуга: ' . ($lead['service'] !== '' ? $lead['service'] : '—') . "\n"
@@ -175,9 +286,9 @@ function send_lead_mail(array $lead): bool
         'X-Mailer: PHP/' . PHP_VERSION,
     ];
 
-    $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    $subject = '=?UTF-8?B?' . base64_encode('Заявка с сайта ' . SITE_NAME) . '?=';
 
-    return @mail(ADMIN_EMAIL, $encodedSubject, $body, implode("\r\n", $headers));
+    return @mail(ADMIN_EMAIL, $subject, $body, implode("\r\n", $headers));
 }
 
 /* ---------- Фотографии ---------- */
@@ -187,7 +298,7 @@ function upload_files(): array
     $files = [];
     foreach (glob(UPLOADS_DIR . '/*') ?: [] as $file) {
         $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+        if (in_array($ext, IMAGE_EXTENSIONS, true)) {
             $files[] = 'uploads/' . basename($file);
         }
     }
@@ -197,25 +308,40 @@ function upload_files(): array
 }
 
 /**
- * Раскладывает фотографии по слотам страницы.
- * Значение из админки имеет приоритет, иначе слот получает очередной файл из uploads/.
+ * Раскладка фото по слотам без повторов: приоритет у выбора из админки,
+ * свободные слоты занимают ещё не использованные файлы из uploads/.
  */
 function page_photos(array $content): array
 {
-    $files  = upload_files();
     $chosen = is_array($content['photos'] ?? null) ? $content['photos'] : [];
-    $total  = count($files);
-    $index  = 0;
     $result = [];
+    $used   = [];
 
     foreach (array_keys(PHOTO_SLOTS) as $slot) {
         $path = (string)($chosen[$slot] ?? '');
-        if ($path !== '' && is_file(APP_ROOT . '/' . $path)) {
+        if ($path !== '' && is_safe_upload_path($path) && !isset($used[$path])) {
             $result[$slot] = $path;
+            $used[$path]   = true;
             continue;
         }
-        $result[$slot] = $total > 0 ? $files[$index % $total] : '';
-        $index++;
+        $result[$slot] = '';
+    }
+
+    $free = array_values(array_filter(
+        upload_files(),
+        static fn(string $file): bool => !isset($used[$file])
+    ));
+
+    foreach (array_keys(PHOTO_SLOTS) as $slot) {
+        if ($result[$slot] !== '') {
+            continue;
+        }
+        $path = array_shift($free);
+        if ($path === null) {
+            break;
+        }
+        $result[$slot] = $path;
+        $used[$path]   = true;
     }
 
     return $result;
