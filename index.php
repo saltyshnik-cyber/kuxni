@@ -18,11 +18,40 @@ $steps = $c['steps'];
 $form  = $c['form'];
 $cs    = $c['contacts_section'];
 
-$tel          = 'tel:' . $ct['phone_raw'];
-$wa           = $ct['whatsapp'];
-$gallerySlots = ['g1', 'g2', 'g3', 'g4', 'g5'];
-$kitchenSlots = ['k1', 'k2', 'k3'];
-$sent         = (string)($_GET['sent'] ?? '');
+$tel     = 'tel:' . $ct['phone_raw'];
+$wa      = (string)$ct['whatsapp'];
+$mailto  = 'mailto:' . $ct['email'];
+$manager = (string)($ct['manager'] ?? '');
+$csrf    = csrf_token();
+$sent    = (string)($_GET['sent'] ?? '');
+$allFiles = upload_files();
+
+/* Кухни: три слота, при пустом — подставляем свободный файл, чтобы не было дыр. */
+$kitchenSlots  = ['k1', 'k2', 'k3'];
+$kitchenPhotos = [];
+foreach ($kitchenSlots as $index => $slot) {
+    $path = (string)($photos[$slot] ?? '');
+    $kitchenPhotos[$index] = $path !== '' ? $path : ($allFiles[$index] ?? '');
+}
+
+$heroPhoto = (string)($photos['hero'] ?? '');
+if ($heroPhoto === '') {
+    $heroPhoto = $allFiles[0] ?? '';
+}
+
+/* Галерея — все свободные фото без повторов с первым экраном и кухнями. */
+$busyFile = array_filter(array_merge([$heroPhoto], $kitchenPhotos));
+$freeFiles = array_values(array_diff($allFiles, $busyFile));
+if (count($freeFiles) < 3) {
+    $freeFiles = $allFiles;
+}
+
+$socials = array_values(array_filter([
+    ['TE', 'Telegram',  (string)($ct['telegram'] ?? '')],
+    ['IG', 'Instagram', (string)($ct['instagram'] ?? '')],
+    ['MX', 'MAX',       (string)($ct['max'] ?? '')],
+    ['PT', 'Pinterest', (string)($ct['pinterest'] ?? '')],
+], static fn(array $item): bool => $item[2] !== ''));
 
 function photo_box(string $path, string $alt, bool $lazy = true): string
 {
@@ -46,6 +75,45 @@ function facts_html(array $facts): string
     return $html;
 }
 
+function socials_html(array $socials): string
+{
+    if ($socials === []) {
+        return '';
+    }
+
+    $html = '<div class="socials">';
+    foreach ($socials as [$code, $label, $url]) {
+        $html .= '<a href="' . e($url) . '" target="_blank" rel="noopener">'
+            . '<i>' . e($code) . '</i>' . e($label) . '</a>';
+    }
+
+    return $html . '</div>';
+}
+
+function lead_form(string $id, array $form, string $csrf, string $submit = ''): string
+{
+    $html = '<form id="' . e($id) . '" data-lead-form action="api/submit.php" method="post" novalidate>'
+        . '<input type="hidden" name="csrf" value="' . e($csrf) . '">'
+        . '<div class="lf-hp"><input type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true"></div>'
+        . '<label class="lf-field" data-field="name"><span>Ваше имя</span>'
+        . '<input type="text" name="name" autocomplete="name" placeholder="Как к вам обращаться" required>'
+        . '<i class="lf-err">Укажите имя — хотя бы 2 символа</i></label>'
+        . '<label class="lf-field" data-field="phone"><span>Телефон</span>'
+        . '<input type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="+7 (___) ___-__-__" required>'
+        . '<i class="lf-err">Проверьте номер: нужно 10–15 цифр</i></label>'
+        . '<label class="lf-field" data-field="service"><span>Что нужно</span><select name="service">';
+
+    foreach ($form['services'] as $service) {
+        $html .= '<option value="' . e((string)$service) . '">' . e((string)$service) . '</option>';
+    }
+
+    return $html . '</select></label>'
+        . '<label class="lf-field"><span>Комментарий</span>'
+        . '<textarea name="comment" rows="3" placeholder="Размеры кухни, материалы, сроки"></textarea></label>'
+        . '<button class="btn btn-oak" type="submit">' . e($submit !== '' ? $submit : (string)$form['submit']) . '</button>'
+        . '</form>';
+}
+
 $navItems = [
     'about'    => $about['eyebrow'],
     'works'    => $gal['eyebrow'],
@@ -66,7 +134,6 @@ $navItems = [
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&family=Oswald:wght@600;700&display=swap" rel="stylesheet">
-<script>if('IntersectionObserver' in window){document.documentElement.className+=' js';}</script>
 <style>
 :root{--ink:#101210;--forest:#1A211D;--forest2:#26302A;--paper:#F5F1EA;--stone:#E4DCCF;--line:#D9D0C2;--muted:#5C574E;
 --oak:#CF9A62;--oak-hi:#EDC593;--oak-dark:#8A5A2B;
@@ -76,6 +143,7 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 body{font-family:var(--sans);font-size:16px;line-height:1.55;color:var(--ink);background:var(--ink);overflow-x:hidden}
 img{display:block;max-width:100%;height:auto}
 a{color:inherit;text-decoration:none}
+button{font-family:inherit}
 section[id]{scroll-margin-top:84px}
 .container{width:100%;max-width:1200px;margin:0 auto;padding:0 var(--pad)}
 .section{padding:88px 0;position:relative}
@@ -98,9 +166,6 @@ section[id]{scroll-margin-top:84px}
 .bg-paper{background:radial-gradient(ellipse 90% 50% at 50% 0%,#fff,transparent 70%),repeating-linear-gradient(90deg,rgba(107,74,34,.07) 0 1.4px,transparent 1.4px 11px),var(--paper)}
 .bg-stone{background:radial-gradient(ellipse 80% 50% at 15% 0%,rgba(255,255,255,.55),transparent 70%),repeating-linear-gradient(90deg,rgba(255,255,255,.5) 0 1.4px,transparent 1.4px 11px),var(--stone)}
 .reveal{opacity:1;transform:none}
-html.js .reveal{opacity:0;transform:translateY(24px);transition:opacity .8s ease,transform .8s ease}
-html.js .reveal.in{opacity:1;transform:none}
-@media (prefers-reduced-motion:reduce){html.js .reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
 
 .header{position:fixed;top:0;left:0;right:0;z-index:50;padding:12px 0;background:rgba(16,18,16,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.12);color:#fff;transition:background .3s,color .3s}
 .header .container{display:flex;align-items:center;gap:12px}
@@ -176,8 +241,6 @@ html.js .reveal.in{opacity:1;transform:none}
 .kgrid figure .noimg{height:100%}
 .kgrid figure::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 45%,rgba(16,18,16,.86))}
 .kgrid .wide{grid-column:1/-1;aspect-ratio:4/5}
-.kgrid .text{background:var(--forest2);border:1px solid rgba(237,197,147,.28)}
-.kgrid .text::after{display:none}
 .kprice{position:absolute;z-index:2;left:16px;right:16px;bottom:14px}
 .kprice small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--oak-hi)}
 .kprice b{display:block;font-family:var(--disp);font-weight:700;font-size:clamp(20px,5.6vw,28px);line-height:1.05;margin-top:5px}
@@ -186,8 +249,6 @@ html.js .reveal.in{opacity:1;transform:none}
 .kgrid .wide .kprice small{font-size:12px;letter-spacing:.24em}
 .kgrid .wide .kprice b{font-size:clamp(40px,11vw,64px);margin-top:6px}
 .kgrid .wide .kprice span{display:block;font-size:14.5px;color:rgba(255,255,255,.82);margin-top:6px}
-.kgrid .text .kprice{position:static;padding:20px 18px}
-.kgrid .text .kprice span{display:block;font-size:13px;line-height:1.4;color:rgba(245,241,234,.7);margin-top:8px}
 .kbtn{margin-top:24px}
 
 .score{display:flex;align-items:center;gap:18px;margin-top:30px;padding:22px;border-radius:var(--r);background:var(--forest);color:#fff}
@@ -244,15 +305,28 @@ html.js .reveal.in{opacity:1;transform:none}
 .clist small{display:block;font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--oak-dark)}
 .clist b{display:block;font-size:16.5px;font-weight:700;overflow-wrap:anywhere}
 
-.footer{padding:38px 0 118px;background:#101210;color:rgba(255,255,255,.6);font-size:13.5px}
+.socials{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.socials a{display:inline-flex;align-items:center;gap:8px;padding:9px 14px 9px 9px;border-radius:999px;background:rgba(16,18,16,.06);border:1px solid rgba(16,18,16,.14);font-size:13.5px;font-weight:700;color:var(--ink)}
+.socials a i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:10.5px;letter-spacing:.04em;background:var(--forest);color:var(--oak-hi)}
+.ccard.dark .socials a,.menu .socials a{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff}
+
+.footer{padding:38px 0 130px;background:#101210;color:rgba(255,255,255,.6);font-size:13.5px}
 .footer .container{display:grid;gap:10px}
 .footer b{font-family:var(--disp);letter-spacing:.14em;color:#fff;font-size:18px}
 
-.dock{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;display:flex;gap:10px;padding:10px;border-radius:999px;background:rgba(16,18,16,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.24);box-shadow:0 18px 40px -16px rgba(0,0,0,.8);transition:transform .4s}
-html.js .dock{transform:translateY(170%)}
-html.js .dock.show{transform:none}
+.dock{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;display:flex;gap:10px;padding:10px;border-radius:999px;background:rgba(16,18,16,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.24);box-shadow:0 18px 40px -16px rgba(0,0,0,.8)}
 .dock .btn{min-height:52px;flex:1;padding:0 18px;font-size:15px}
-.dock .ico{flex:none;width:52px;min-height:52px;display:grid;place-items:center;color:var(--oak-hi);border:1.5px solid rgba(255,255,255,.38);border-radius:50%}
+.dock .ico{flex:none;width:52px;min-height:52px;display:grid;place-items:center;color:var(--oak-hi);border:1.5px solid rgba(255,255,255,.38);border-radius:50%;background:transparent;cursor:pointer}
+.dock .ico svg{width:20px;height:20px}
+
+.modal{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(8,10,9,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto}
+.modal.open{display:flex}
+.modal .sheet{width:100%;max-width:430px;background:var(--forest);color:#fff;border-radius:24px;padding:24px 20px;border:1px solid rgba(237,197,147,.3);box-shadow:0 40px 90px -30px #000;position:relative;margin:auto}
+.modal h2{font-family:var(--disp);font-weight:600;text-transform:uppercase;font-size:26px;line-height:1.1}
+.modal .sub{font-size:14px;color:rgba(245,241,234,.7);margin-top:8px}
+.modal .x{position:absolute;top:14px;right:14px;width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(255,255,255,.34);background:transparent;color:#fff;font-size:18px;line-height:1;cursor:pointer}
+.modal .x:hover{border-color:var(--oak)}
+.modal .leadcard{padding:0;box-shadow:none;background:transparent}
 
 .toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));z-index:200;display:flex;align-items:center;gap:14px;max-width:calc(100% - 32px);width:max-content;padding:14px 20px;border-radius:20px;background:#16211B;color:#fff;border:1px solid rgba(237,197,147,.5);box-shadow:0 24px 60px -20px #000;opacity:0;pointer-events:none;transform:translate(-50%,18px);transition:opacity .35s,transform .35s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -267,6 +341,7 @@ html.js .dock.show{transform:none}
 @media (min-width:640px){
  .hero-btns{grid-template-columns:auto auto;justify-content:start}
  .leadcard{padding:30px}
+ .modal{padding:24px}
 }
 @media (min-width:960px){
  :root{--pad:40px}
@@ -279,7 +354,7 @@ html.js .dock.show{transform:none}
  .hero{padding:0 0 120px;min-height:100vh;display:flex;align-items:center}
  .hero .wrap{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:56px;align-items:center;padding:130px 40px 0;width:100%;max-width:1200px;margin:0 auto}
  .hero-photo{order:2;padding-top:0;border-radius:var(--r);border:1px solid rgba(255,255,255,.22);box-shadow:0 40px 80px -30px #000;height:min(72vh,640px)}
- .hero-photo img{height:100%;max-height:none;min-height:0}
+ .hero-photo img{height:100%;max-height:none;min-height:0;object-fit:cover}
  .hero-photo .noimg{height:100%}
  .hero-photo::after{display:none}
  .hero-content{order:1;margin-top:0;padding:0}
@@ -337,19 +412,20 @@ html.js .dock.show{transform:none}
       <a class="btn btn-oak" href="<?= e($tel) ?>">Позвонить <?= e($ct['phone_text']) ?></a>
       <a class="btn btn-glass" href="<?= e($wa) ?>" target="_blank" rel="noopener">Написать в WhatsApp</a>
     </div>
-    <p><?= e($ct['address']) ?><br><?= e($ct['hours']) ?></p>
+    <?= socials_html($socials) ?>
+    <p><?= e($ct['address']) ?><br><?= e($ct['hours']) ?><?= $manager !== '' ? '<br>Менеджер — ' . e($manager) : '' ?></p>
   </div>
 </div>
 
 <section class="hero" id="top">
   <div class="wrap">
-    <div class="hero-photo"><?= photo_box($photos['hero'], 'Кухня на заказ в Краснодаре', false) ?></div>
+    <div class="hero-photo"><?= photo_box($heroPhoto, 'Кухня на заказ в Краснодаре', false) ?></div>
     <div class="hero-content">
       <p class="kick"><?= e($hero['kicker']) ?></p>
       <h1><?= e($hero['title']) ?><em><?= e($hero['title_accent']) ?></em></h1>
       <p class="sub"><?= e($hero['sub']) ?></p>
       <div class="hero-btns">
-        <a class="btn btn-oak" href="#lead">Рассчитать стоимость</a>
+        <button class="btn btn-oak" type="button" data-open-lead>Рассчитать стоимость</button>
         <a class="btn btn-glass" href="<?= e($wa) ?>" target="_blank" rel="noopener">WhatsApp</a>
       </div>
       <div class="hfacts"><?= facts_html($hero['facts']) ?></div>
@@ -383,9 +459,9 @@ html.js .dock.show{transform:none}
     </div>
   </div>
   <div class="gal">
-    <?php foreach ($gallerySlots as $index => $slot): ?>
+    <?php foreach ($freeFiles as $index => $file): ?>
     <figure class="slide">
-      <?= photo_box($photos[$slot], 'Наши работы, фото ' . ($index + 1)) ?>
+      <?= photo_box($file, 'Наши работы, фото ' . ($index + 1)) ?>
       <span class="num"><?= sprintf('%02d', $index + 1) ?></span>
     </figure>
     <?php endforeach; ?>
@@ -426,14 +502,11 @@ html.js .dock.show{transform:none}
     </div>
     <div class="kgrid">
       <?php foreach ($kit['items'] as $index => $item):
-          $slot = $kitchenSlots[$index] ?? null;
-          $hasPhoto = $slot !== null && $photos[$slot] !== '';
-          $classes = $index === 0 ? ' class="wide"' : ($hasPhoto ? '' : ' class="text"');
+          $photo = $kitchenPhotos[$index] ?? '';
+          $classes = $index === 0 ? ' class="wide"' : '';
       ?>
       <figure<?= $classes ?>>
-        <?php if ($hasPhoto): ?>
-        <?= photo_box($photos[$slot], 'Кухня: ' . (string)($item['label'] ?? '')) ?>
-        <?php endif; ?>
+        <?= photo_box($photo, 'Кухня: ' . (string)($item['label'] ?? '')) ?>
         <div class="kprice">
           <small><?= e((string)($item['label'] ?? '')) ?></small>
           <b><?= e((string)($item['price'] ?? '')) ?></b>
@@ -442,7 +515,7 @@ html.js .dock.show{transform:none}
       </figure>
       <?php endforeach; ?>
     </div>
-    <a class="btn btn-oak kbtn" href="#lead"><?= e($kit['button']) ?></a>
+    <button class="btn btn-oak kbtn" type="button" data-open-lead><?= e($kit['button']) ?></button>
   </div>
 </section>
 
@@ -501,93 +574,3 @@ html.js .dock.show{transform:none}
     <div class="lead-grid">
       <div class="reveal">
         <div class="clist">
-          <a href="<?= e($tel) ?>">
-            <span class="ic">☎</span>
-            <span><small>Позвонить</small><b><?= e($ct['phone_text']) ?></b></span>
-          </a>
-          <a href="<?= e($wa) ?>" target="_blank" rel="noopener">
-            <span class="ic">WA</span>
-            <span><small>WhatsApp</small><b>Написать в мессенджер</b></span>
-          </a>
-          <a href="<?= e($ct['telegram']) ?>" target="_blank" rel="noopener">
-            <span class="ic">TG</span>
-            <span><small>Telegram</small><b>Задать вопрос</b></span>
-          </a>
-        </div>
-      </div>
-      <div class="leadcard reveal">
-        <h3><?= e($form['intro']) ?></h3>
-        <form id="lead-form" action="api/submit.php" method="post" novalidate>
-          <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
-          <div class="lf-hp"><label>Организация<input type="text" name="company" tabindex="-1" autocomplete="off"></label></div>
-          <label class="lf-field" data-field="name">
-            <span>Ваше имя</span>
-            <input type="text" name="name" autocomplete="name" placeholder="Как к вам обращаться" required>
-            <i class="lf-err">Укажите имя — хотя бы 2 символа</i>
-          </label>
-          <label class="lf-field" data-field="phone">
-            <span>Телефон</span>
-            <input type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="+7 (___) ___-__-__" required>
-            <i class="lf-err">Проверьте номер: нужно 10–15 цифр</i>
-          </label>
-          <label class="lf-field" data-field="service">
-            <span>Что нужно</span>
-            <select name="service">
-              <?php foreach ($form['services'] as $service): ?>
-              <option value="<?= e((string)$service) ?>"><?= e((string)$service) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label class="lf-field">
-            <span>Комментарий</span>
-            <textarea name="comment" rows="3" placeholder="Размеры кухни, материалы, сроки"></textarea>
-          </label>
-          <button class="btn btn-oak" type="submit"><?= e($form['submit']) ?></button>
-        </form>
-        <p class="lf-note"><?= e($form['note']) ?></p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="section bg-stone" id="contacts">
-  <div class="container">
-    <div class="reveal">
-      <p class="eyebrow"><?= e($cs['eyebrow']) ?></p>
-      <h2 class="h2"><?= e($cs['title']) ?><em><?= e($cs['title_accent']) ?></em></h2>
-    </div>
-    <div class="cards">
-      <div class="ccard dark">
-        <h3>Адрес и график</h3>
-        <p><?= e($ct['address']) ?></p>
-        <div class="open"><i></i><?= e($ct['hours']) ?></div>
-      </div>
-      <div class="ccard">
-        <h3>Связаться</h3>
-        <div class="clist" style="margin-top:16px">
-          <a href="<?= e($tel) ?>"><span class="ic">☎</span><span><small>Телефон</small><b><?= e($ct['phone_text']) ?></b></span></a>
-          <a href="mailto:<?= e($ct['email']) ?>"><span class="ic">@</span><span><small>Почта</small><b><?= e($ct['email']) ?></b></span></a>
-        </div>
-      </div>
-      <div class="ccard">
-        <h3>Как добраться</h3>
-        <p>Шоурум с образцами фасадов и столешниц — приезжайте выбрать материалы.</p>
-        <div class="mapbtns">
-          <a href="<?= e($ct['maps_yandex']) ?>" target="_blank" rel="noopener">Яндекс Карты</a>
-          <a href="<?= e($ct['maps_2gis']) ?>" target="_blank" rel="noopener">2ГИС</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<footer class="footer">
-  <div class="container">
-    <b>MEBELS.KRD</b>
-    <span><?= e($ct['address']) ?> · <?= e($ct['phone_text']) ?></span>
-    <span>© <?= date('Y') ?> <?= e(SITE_NAME) ?>. Кухни на заказ в Краснодаре.</span>
-  </div>
-</footer>
-
-<div class="dock" id="dock">
-  <a class="btn btn-oak" href="
