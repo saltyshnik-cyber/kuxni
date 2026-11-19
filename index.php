@@ -565,4 +565,4 @@ section[id]{scroll-margin-top:84px}
         <div class="clist">
           <a href="<?= e($tel) ?>">
             <span class="ic">☎</span>
-            <span><small>По
+            <span><small>Позвонить</small><b><?= e
