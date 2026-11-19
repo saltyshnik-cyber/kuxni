@@ -36,6 +36,7 @@
           <a href="<?= e($tel) ?>"><span class="ic">☎</span><span><small>Телефон</small><b><?= e($ct['phone_text']) ?></b></span></a>
           <a href="<?= e($mailto) ?>"><span class="ic">@</span><span><small>Почта</small><b><?= e($ct['email']) ?></b></span></a>
         </div>
+        <?= socials_html($socials) ?>
       </div>
       <div class="ccard">
         <h3>Как добраться</h3>
