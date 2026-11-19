@@ -314,19 +314,20 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  var lock = function (on) { document.body.style.overflow = on ? 'hidden' : ''; };
-
   var menu = document.getElementById('menu');
-  var setMenu = function (on) { menu.classList.toggle('open', on); lock(on); };
+  var lock = function (on) { document.body.style.overflow = on ? 'hidden' : ''; };
+  var menuOpen = function (on) { menu.classList.toggle('open', on); lock(on); };
   document.querySelectorAll('[data-menu-open]').forEach(function (b) {
-    b.addEventListener('click', function () { setMenu(true); });
+    b.addEventListener('click', function () { menuOpen(true); });
   });
   document.querySelectorAll('[data-menu-close]').forEach(function (b) {
-    b.addEventListener('click', function () { setMenu(false); });
+    b.addEventListener('click', function () { menuOpen(false); });
   });
   menu.querySelectorAll('a').forEach(function (a) {
-    a.addEventListener('click', function () { setMenu(false); });
+    a.addEventListener('click', function () { menuOpen(false); });
   });
 
   var modal = document.getElementById('leadModal');
-  var setModal = function (on) {
+  var modalOpen = function (on) {
+    modal.classList.toggle('open', on);
+    lock
