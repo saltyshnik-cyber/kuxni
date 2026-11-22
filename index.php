@@ -201,7 +201,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
 
 <main id="top">
 <section class="hero"><div class="wrap">
-  <div class="hero-photo"><img src="<?= e($photo(0)) ?>" alt="Шкаф-прихожая в матовом фасаде и дубе" width="960" height="1195"></div>
+  <div class="hero-photo"><img src="<?= e($slotPhoto('hero', 0)) ?>" alt="Прямая кухня: светлые верхние шкафы, нижние фасады под дерево, серый фартук" width="960" height="1195"></div>
   <div class="hero-content container">
     <p class="kick">Кухни · Шкафы · Прихожие</p>
     <h1>Мебель на заказ<em>в Краснодаре</em></h1>
