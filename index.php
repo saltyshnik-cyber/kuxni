@@ -14,7 +14,17 @@ $fallbackPhoto = 'data:image/svg+xml;charset=utf-8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#26302A"/></svg>'
 );
 
-$photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $realPhotos[$i % count($realPhotos)];
+$slotPhotos = page_photos(content());
+
+$withVersion = static function (string $path): string {
+    $file = __DIR__ . '/' . $path;
+
+    return $path . '?v=' . (is_file($file) ? (string)filemtime($file) : '1');
+};
+
+$photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $withVersion($realPhotos[$i % count($realPhotos)]);
+
+$heroPhoto = ($slotPhotos['hero'] ?? '') !== '' ? $withVersion($slotPhotos['hero']) : $photo(0);
 
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
