@@ -1,17 +1,21 @@
-"""Сбор базы живых русскоязычных Telegram-каналов для партнёрства и розыгрышей."""
-import asyncio
+"""Сбор базы живых русскоязычных Telegram-каналов для партнёрства и розыгрышей.
+
+Работает без Telegram API и api_id: кандидаты берутся из открытых каталогов
+и поисковой выдачи, качество проверяется по публичной веб-версии канала.
+"""
+from __future__ import annotations
+
 import csv
-import os
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote, unquote
 
-from dotenv import load_dotenv
-from telethon import TelegramClient, errors, functions, types
+import requests
+from bs4 import BeautifulSoup
 
 BASE_DIR = Path(__file__).resolve().parent
-ENV_FILE = BASE_DIR / ".env"
-SESSION_FILE = str(BASE_DIR / "session")
 OUTPUT_FILE = BASE_DIR / "channels.csv"
 
 KEYWORDS = [
@@ -27,153 +31,263 @@ KEYWORDS = [
 ]
 
 MIN_SUBSCRIBERS = 500
-MAX_SUBSCRIBERS = 25000
-MAX_POST_AGE_DAYS = 10
-MIN_CYRILLIC_SHARE = 0.3   # доля кириллицы среди букв в названии + описании
-SEARCH_LIMIT = 100
-REQUEST_DELAY = 2          # секунд между запросами к API
+MAX_SUBSCRIBERS = 25_000
+MAX_POST_AGE_DAYS = 7
+MIN_ENGAGEMENT_PCT = 15.0     # средние просмотры / подписчики, %
+POSTS_FOR_ENGAGEMENT = 5      # по скольким последним постам считаем просмотры
+MIN_CYRILLIC_SHARE = 0.3      # доля кириллицы среди букв в названии + описании
+REQUEST_DELAY = 2.0           # секунд после каждого запроса
+TIMEOUT = 25
 MAX_RETRIES = 3
-REQUIRE_CONTACT = False    # True — сохранять только каналы, где найден контакт
 
 CSV_COLUMNS = [
     "Название канала",
     "Ссылка на канал",
     "Подписчики",
+    "Средние просмотры",
+    "Вовлечённость %",
     "Контакт админа",
     "Описание канала",
 ]
 
+SESSION = requests.Session()
+SESSION.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+})
+
+TME_RE = re.compile(r"t\.me/(?:s/)?([A-Za-z][A-Za-z0-9_]{4,31})")
+TLGRM_RE = re.compile(r"tlgrm\.ru/channels/@([A-Za-z][A-Za-z0-9_]{4,31})")
 MENTION_RE = re.compile(r"(?<![\w/@.])@([A-Za-z][A-Za-z0-9_]{3,31})\b")
-TME_LINK_RE = re.compile(
-    r"(?:https?://)?(?:www\.)?(?:t|telegram)\.me/((?:\+|joinchat/)?[A-Za-z0-9_\-]{4,})",
-    re.IGNORECASE,
-)
+COUNT_RE = re.compile(r"([\d\s.,]+)\s*(k|m|тыс\.?|млн\.?)?")
+
+# Служебные пути Telegram, которые не являются каналами.
+RESERVED = {
+    "s", "joinchat", "addstickers", "share", "proxy", "socks",
+    "iv", "setlanguage", "login", "durov", "telegram",
+}
 
 
-def load_credentials() -> tuple[int, str]:
-    load_dotenv(ENV_FILE)
-    api_id = os.getenv("API_ID", "").strip()
-    api_hash = os.getenv("API_HASH", "").strip()
-
-    if not (api_id.isdigit() and api_hash):
-        print("API_ID / API_HASH не найдены в .env. Получите их на https://my.telegram.org")
-        api_id = input("api_id: ").strip()
-        api_hash = input("api_hash: ").strip()
-        if not (api_id.isdigit() and api_hash):
-            raise SystemExit("Некорректные api_id / api_hash.")
-        with open(ENV_FILE, "a", encoding="utf-8") as file:
-            file.write(f"API_ID={api_id}\nAPI_HASH={api_hash}\n")
-        print(f"Данные сохранены в {ENV_FILE.name}")
-
-    return int(api_id), api_hash
-
-
-async def safe_call(func, *args, **kwargs):
-    """Вызов API с паузой после запроса и ожиданием при FloodWait. None — при неудаче."""
-    for _ in range(MAX_RETRIES):
+def fetch(url: str) -> str | None:
+    """GET с паузами и повторами. None, если страница недоступна."""
+    for attempt in range(1, MAX_RETRIES + 1):
         try:
-            result = await func(*args, **kwargs)
-        except errors.FloodWaitError as error:
-            wait = error.seconds + 1
-            print(f"    FloodWait: жду {wait} с")
-            await asyncio.sleep(wait)
+            response = SESSION.get(url, timeout=TIMEOUT)
+        except requests.RequestException as error:
+            print(f"    сеть: {type(error).__name__}, повтор {attempt}/{MAX_RETRIES}")
+            time.sleep(REQUEST_DELAY * attempt)
             continue
-        except errors.RPCError as error:
-            print(f"    Ошибка API: {type(error).__name__}")
-            await asyncio.sleep(REQUEST_DELAY)
+
+        time.sleep(REQUEST_DELAY)
+
+        if response.status_code == 200:
+            return response.text
+
+        retryable = response.status_code == 429 or response.status_code >= 500
+        print(f"    HTTP {response.status_code}" + (", повтор" if retryable else ""))
+        if not retryable:
             return None
-        await asyncio.sleep(REQUEST_DELAY)
-        return result
+        time.sleep(REQUEST_DELAY * attempt)
     return None
 
 
-def is_public_channel(chat) -> bool:
-    return (
-        isinstance(chat, types.Channel)
-        and chat.broadcast
-        and bool(chat.username)
-        and not chat.scam
-        and not chat.fake
-    )
+def get_soup(url: str) -> BeautifulSoup | None:
+    html = fetch(url)
+    return BeautifulSoup(html, "html.parser") if html else None
+
+
+def parse_count(text: str) -> int:
+    """«1 234», «12.3K», «1,2 тыс.» → целое число."""
+    cleaned = text.replace("\xa0", " ").replace("\u2009", " ").strip().lower()
+    match = COUNT_RE.search(cleaned)
+    if match is None:
+        return 0
+
+    number = match.group(1).replace(" ", "")
+    number = number.replace(",", "") if "," in number and "." in number else number.replace(",", ".")
+
+    try:
+        value = float(number)
+    except ValueError:
+        return 0
+
+    suffix = (match.group(2) or "").rstrip(".")
+    if suffix in {"k", "тыс"}:
+        value *= 1_000
+    elif suffix in {"m", "млн"}:
+        value *= 1_000_000
+
+    return int(round(value))
 
 
 def is_russian(text: str) -> bool:
     letters = re.findall(r"[^\W\d_]", text)
     cyrillic = re.findall(r"[а-яёА-ЯЁ]", text)
-    if len(cyrillic) < 5:
+    if len(letters) < 5 or len(cyrillic) < 5:
         return False
     return len(cyrillic) / len(letters) >= MIN_CYRILLIC_SHARE
 
 
-def extract_contacts(about: str, own_username: str) -> list[str]:
+def extract_contacts(description: str, own_username: str) -> list[str]:
     own = own_username.lower()
     contacts: list[str] = []
     seen: set[str] = set()
 
-    def add(label: str, key: str) -> None:
-        if key.lower() == own or key.lower() in seen:
-            return
-        seen.add(key.lower())
-        contacts.append(label)
-
-    for match in TME_LINK_RE.finditer(about):
-        key = match.group(1)
-        label = f"@{key}" if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]+", key) else f"https://t.me/{key}"
-        add(label, key)
-    for match in MENTION_RE.finditer(about):
-        add(f"@{match.group(1)}", match.group(1))
+    for match in MENTION_RE.finditer(description):
+        name = match.group(1)
+        if name.lower() == own or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        contacts.append(f"@{name}")
 
     return contacts
 
 
-async def collect_candidates(client: TelegramClient) -> dict[int, types.Channel]:
-    candidates: dict[int, types.Channel] = {}
+def catalog_links(keyword: str) -> list[tuple[str, str]]:
+    plain = quote(keyword, safe="")
+    site_query = quote(f"site:t.me {keyword}", safe="")
+    return [
+        ("tlgrm.ru", f"https://tlgrm.ru/search?q={plain}"),
+        ("telega.in", f"https://telega.in/catalog?q={plain}"),
+        ("duckduckgo", f"https://html.duckduckgo.com/html/?q={site_query}"),
+        ("ddg-lite", f"https://lite.duckduckgo.com/lite/?q={site_query}"),
+    ]
+
+
+def extract_usernames(html: str) -> set[str]:
+    # unquote разворачивает редиректные ссылки поисковиков в прямые t.me/...
+    text = unquote(html)
+    names: set[str] = set()
+
+    for pattern in (TME_RE, TLGRM_RE):
+        for match in pattern.finditer(text):
+            name = match.group(1)
+            if name.lower() in RESERVED:
+                continue
+            names.add(name)
+
+    return names
+
+
+def collect_candidates() -> list[str]:
+    found: dict[str, None] = {}
+
     for index, keyword in enumerate(KEYWORDS, 1):
         print(f"[поиск {index}/{len(KEYWORDS)}] «{keyword}»")
-        result = await safe_call(client, functions.contacts.SearchRequest(q=keyword, limit=SEARCH_LIMIT))
-        if result is None:
+        before = len(found)
+
+        for source, url in catalog_links(keyword):
+            html = fetch(url)
+            if html is None:
+                print(f"    {source}: недоступен")
+                continue
+            names = extract_usernames(html)
+            for name in names:
+                found.setdefault(name, None)
+            print(f"    {source}: ссылок {len(names)}")
+
+        print(f"    новых: {len(found) - before}, всего кандидатов: {len(found)}")
+
+    return list(found)
+
+
+def parse_subscribers(info: BeautifulSoup) -> int | None:
+    for counter in info.select("div.tgme_channel_info_counter"):
+        label_el = counter.select_one("span.counter_type")
+        if label_el is None:
             continue
-        found = [chat for chat in result.chats if is_public_channel(chat)]
-        new = [chat for chat in found if chat.id not in candidates]
-        candidates.update({chat.id: chat for chat in new})
-        print(f"    каналов: {len(found)}, новых: {len(new)}, всего кандидатов: {len(candidates)}")
-    return candidates
+        label = label_el.get_text(" ", strip=True).lower()
+        if "subscriber" in label or "подписчик" in label:
+            value_el = counter.select_one("span.counter_value")
+            return parse_count(value_el.get_text() if value_el else "")
+    return None
 
 
-async def build_row(client: TelegramClient, chat: types.Channel) -> dict | None:
-    full = await safe_call(client, functions.channels.GetFullChannelRequest(chat))
-    if full is None:
+def parse_posts(soup: BeautifulSoup) -> list[dict]:
+    posts: list[dict] = []
+
+    for message in soup.select("div.tgme_widget_message"):
+        time_el = message.select_one("time[datetime]")
+        if time_el is None or not time_el.get("datetime"):
+            continue
+
+        try:
+            date = datetime.fromisoformat(time_el["datetime"])
+        except ValueError:
+            continue
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+
+        views_el = message.select_one("span.tgme_widget_message_views")
+        views = parse_count(views_el.get_text()) if views_el else 0
+        posts.append({"date": date, "views": views})
+
+    posts.sort(key=lambda post: post["date"])
+    return posts
+
+
+def check_channel(username: str) -> dict | None:
+    soup = get_soup(f"https://t.me/s/{username}")
+    if soup is None:
         return None
 
-    subscribers = full.full_chat.participants_count or 0
+    # Блок tgme_channel_info есть только у публичных каналов, у групп его нет.
+    info = soup.select_one("div.tgme_channel_info")
+    if info is None:
+        print("    пропуск: не публичный канал")
+        return None
+
+    title_el = info.select_one(".tgme_channel_info_header_title")
+    title = title_el.get_text(" ", strip=True) if title_el else username
+
+    subscribers = parse_subscribers(info)
+    if subscribers is None:
+        print("    пропуск: подписчики скрыты")
+        return None
     if not MIN_SUBSCRIBERS <= subscribers <= MAX_SUBSCRIBERS:
         print(f"    пропуск: подписчиков {subscribers}")
         return None
 
-    about = (full.full_chat.about or "").strip()
-    if not is_russian(f"{chat.title} {about}"):
+    description_el = info.select_one(".tgme_channel_info_description")
+    description = description_el.get_text(" ", strip=True) if description_el else ""
+    description = " ".join(description.split())
+
+    if not is_russian(f"{title} {description}"):
         print("    пропуск: не русскоязычный")
         return None
 
-    contacts = extract_contacts(about, chat.username)
-    if REQUIRE_CONTACT and not contacts:
-        print("    пропуск: нет контактов")
+    posts = parse_posts(soup)
+    if not posts:
+        print("    пропуск: нет постов в веб-версии")
         return None
 
-    messages = await safe_call(client.get_messages, chat, limit=1)
-    if not messages:
-        print("    пропуск: нет постов или канал недоступен")
+    last_post = posts[-1]["date"]
+    if last_post < datetime.now(timezone.utc) - timedelta(days=MAX_POST_AGE_DAYS):
+        print(f"    пропуск: последний пост {last_post:%d.%m.%Y}")
         return None
-    if messages[0].date < datetime.now(timezone.utc) - timedelta(days=MAX_POST_AGE_DAYS):
-        print(f"    пропуск: последний пост {messages[0].date:%Y-%m-%d}")
+
+    views = [post["views"] for post in posts if post["views"] > 0][-POSTS_FOR_ENGAGEMENT:]
+    if not views:
+        print("    пропуск: просмотры скрыты")
+        return None
+
+    average_views = sum(views) / len(views)
+    engagement = average_views / subscribers * 100
+    if engagement < MIN_ENGAGEMENT_PCT:
+        print(f"    пропуск: вовлечённость {engagement:.1f}%")
         return None
 
     return {
-        "Название канала": chat.title,
-        "Ссылка на канал": f"https://t.me/{chat.username}",
+        "Название канала": title,
+        "Ссылка на канал": f"https://t.me/{username}",
         "Подписчики": subscribers,
-        "Контакт админа": ", ".join(contacts),
-        "Описание канала": " ".join(about.split()),
+        "Средние просмотры": int(round(average_views)),
+        "Вовлечённость %": round(engagement, 1),
+        "Контакт админа": ", ".join(extract_contacts(description, username)),
+        "Описание канала": description,
     }
 
 
@@ -185,26 +299,33 @@ def save_csv(rows: list[dict]) -> None:
     print(f"Сохранено каналов: {len(rows)} → {OUTPUT_FILE}")
 
 
-async def main() -> None:
-    api_id, api_hash = load_credentials()
+def main() -> None:
     rows: list[dict] = []
 
-    async with TelegramClient(SESSION_FILE, api_id, api_hash) as client:
-        try:
-            candidates = await collect_candidates(client)
-            total = len(candidates)
-            for index, chat in enumerate(candidates.values(), 1):
-                print(f"[проверка {index}/{total}] @{chat.username}")
-                row = await build_row(client, chat)
-                if row:
-                    rows.append(row)
-                    print(f"    ✔ подходит ({row['Подписчики']} подп.)")
-        finally:
+    try:
+        candidates = collect_candidates()
+        total = len(candidates)
+        if total == 0:
+            print("Кандидаты не найдены: каталоги и поисковики не отдали ссылки.")
+            return
+
+        print(f"\nКандидатов на проверку: {total}\n")
+
+        for index, username in enumerate(candidates, 1):
+            print(f"[проверка {index}/{total}] @{username}")
+            row = check_channel(username)
+            if row is not None:
+                rows.append(row)
+                print(f"    ✔ подходит: вовлечённость {row['Вовлечённость %']}%")
+    except KeyboardInterrupt:
+        print("\nПрервано пользователем, сохраняю найденное.")
+    finally:
+        rows.sort(key=lambda row: row["Вовлечённость %"], reverse=True)
+        if rows:
             save_csv(rows)
+        else:
+            print("Подходящих каналов не найдено.")
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nПрервано пользователем.")
+    main()
