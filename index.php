@@ -34,13 +34,14 @@ $heroPhoto = $slotPhoto('hero', 0);
 
 $address     = 'г. Краснодар, ул. Конечная, 2 (ориентир — рядом с самолётом, мкр. Энка)';
 $addressShort = 'г. Краснодар, ул. Конечная, 2 (рядом с самолётом, мкр. Энка)';
-$mapLat      = '45.0846';
-$mapLon      = '38.9832';
+// Яндекс.Карты принимают координаты в порядке «долгота,широта».
+$mapLon      = '38.980850';
+$mapLat      = '45.083750';
 $mapEmbed    = 'https://yandex.ru/map-widget/v1/?ll=' . $mapLon . '%2C' . $mapLat
-    . '&z=17&l=map&pt=' . $mapLon . '%2C' . $mapLat . '%2Cpm2rdm';
+    . '&z=16&l=map&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
 $mapYandex   = 'https://yandex.ru/maps/?ll=' . $mapLon . '%2C' . $mapLat
-    . '&z=17&pt=' . $mapLon . '%2C' . $mapLat . '%2Cpm2rdm';
-$map2gis     = 'https://2gis.ru/krasnodar?m=' . $mapLon . '%2C' . $mapLat . '%2F17';
+    . '&z=16&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
+$map2gis     = 'https://2gis.ru/krasnodar?m=' . $mapLon . '%2C' . $mapLat . '%2F16';
 
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
