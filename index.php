@@ -342,4 +342,95 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
 
 <div class="dock">
   <button class="btn btn-oak" type="button" data-modal-open onclick="return openLead();">Рассчитать стоимость</button>
-  <a class="ico btn" href="tel:
+  <a class="ico btn" href="tel:+79180892254" aria-label="Позвонить"><?= $phoneBtn ?></a>
+  <a class="ico btn" href="<?= e($tgLink) ?>" target="_blank" rel="noopener" aria-label="Telegram"><?= $tgBtn ?></a>
+</div>
+
+<div class="modal" id="leadModal" role="dialog" aria-modal="true" aria-labelledby="leadModalTitle">
+  <div class="box">
+    <button class="x" type="button" data-modal-close aria-label="Закрыть" onclick="return closeLead();">&times;</button>
+    <h3 id="leadModalTitle">Рассчитать стоимость</h3>
+    <p class="sub">Перезвоним в течение рабочего дня и посчитаем проект.</p>
+    <form class="form js-lead" method="post" action="api/submit.php" novalidate>
+      <?php $formFields(); ?>
+    </form>
+  </div>
+</div>
+
+<script>
+var menu = document.getElementById('menu');
+var unlock = function () { document.body.style.overflow = ''; };
+
+document.addEventListener('click', function (e) {
+  if (e.target.closest('[data-modal-open]')) { e.preventDefault(); openLead(); return; }
+  if (e.target.closest('[data-modal-close]')) { e.preventDefault(); closeLead(); return; }
+  if (e.target === document.getElementById('leadModal')) { closeLead(); }
+  if (e.target.closest('[data-menu-open]')) {
+    e.preventDefault(); menu.classList.add('open'); document.body.style.overflow = 'hidden'; return;
+  }
+  if (e.target.closest('[data-menu-close]')) { menu.classList.remove('open'); unlock(); return; }
+  if (menu && menu.contains(e.target) && e.target.closest('a')) { menu.classList.remove('open'); unlock(); }
+});
+
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button, a');
+  if (!b || b.hasAttribute('data-modal-open') || b.type === 'submit') return;
+  var t = (b.textContent || '').toLowerCase();
+  if (t.indexOf('рассчитать стоимость') > -1 || t.indexOf('оставить заявку') > -1) {
+    e.preventDefault(); openLead();
+  }
+}, true);
+
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeLead(); } });
+
+document.querySelectorAll('form.js-lead').forEach(function (form) {
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var note = form.querySelector('.form-note');
+    var btn = form.querySelector('button[type="submit"]');
+    var name = form.querySelector('[name="name"]').value.trim();
+    var digits = form.querySelector('[name="phone"]').value.replace(/\D/g, '');
+    var fail = function (msg) { note.className = 'form-note err'; note.textContent = msg; };
+
+    if (name.length < 2) { return fail('Укажите имя.'); }
+    if (digits.length < 10) { return fail('Проверьте номер телефона.'); }
+
+    note.className = 'form-note';
+    note.textContent = 'Отправляем…';
+    btn.disabled = true;
+
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        return r.json().catch(function () {
+          return { ok: r.ok, message: r.ok ? 'Заявка отправлена.' : 'Ошибка отправки.' };
+        });
+      })
+      .then(function (data) {
+        if (data && data.ok) {
+          note.className = 'form-note ok';
+          note.textContent = data.message || 'Заявка отправлена. Мы свяжемся с вами.';
+          form.reset();
+          setTimeout(function () { if (form.closest('#leadModal')) { closeLead(); } }, 1200);
+        } else {
+          fail((data && data.message) || 'Не удалось отправить. Позвоните нам.');
+        }
+      })
+      .catch(function () { fail('Проблема со связью. Позвоните: +7 (918) 089-22-54'); })
+      .finally(function () { btn.disabled = false; });
+  });
+});
+
+(function () {
+  var hdr = document.getElementById('hdr');
+  var onScroll = function () { if (hdr) { hdr.classList.toggle('scrolled', window.scrollY > 40); } };
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+})();
+</script>
+</body>
+</html>
