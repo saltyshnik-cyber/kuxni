@@ -298,6 +298,27 @@ legend{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:upperc
 @media (min-width:720px){.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .slot span{display:block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--oak);margin-bottom:5px}
 .muted{color:var(--muted);font-size:13.5px}
+.photos-intro{color:var(--muted);font-size:13.5px;margin-bottom:16px}
+.pgroup{margin-bottom:26px}
+.pgroup h2{font-size:17px;font-weight:700;margin-bottom:4px}
+.pgroup .ghint{font-size:13px;color:var(--muted);margin-bottom:14px}
+.pcards{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:560px){.pcards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:900px){.pcards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.pcard{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel2);display:flex;flex-direction:column;min-width:0}
+.pcard .pic{position:relative;background:#0B0E0C}
+.pcard .pic img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.pcard .pic .empty{display:grid;place-items:center;aspect-ratio:4/3;color:var(--muted);font-size:13px}
+.pcard .pic .state{position:absolute;left:10px;bottom:10px;padding:4px 10px;border-radius:999px;background:rgba(15,18,16,.82);font-size:12px;font-weight:600;color:var(--oak-hi)}
+.pcard .pbody{padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.pcard .ptitle{font-weight:700;font-size:15px}
+.pcard .pratio{font-size:12.5px;color:var(--muted)}
+.pcard .btn{width:100%;min-height:46px}
+.pcard input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pcard .pnote{font-size:12.5px;min-height:18px}
+.pcard .pnote.ok{color:var(--ok)}.pcard .pnote.err{color:var(--err)}
+html,body{max-width:100%;overflow-x:hidden}
+.top,.tabs,.wrap{min-width:0}
 .login{min-height:100vh;display:grid;place-items:center;padding:24px}
 .login .card{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px}
 .login h1{font-size:19px;margin-bottom:6px}
