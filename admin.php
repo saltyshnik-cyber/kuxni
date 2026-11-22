@@ -154,6 +154,9 @@ if ($isAuthed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $data  = content();
                     $old   = (string)($data['photos'][$slot] ?? '');
                     $data['photos'][$slot] = $path;
+                    if ($slot === 'hero') {
+                        set_path($data, 'photos.hero', $path);
+                    }
                     if (!save_content($data)) {
                         $reply(false, 'Не удалось записать data/content.json');
                     }
