@@ -35,8 +35,8 @@ $heroPhoto = $slotPhoto('hero', 0);
 $address     = 'г. Краснодар, ул. Конечная, 2 (ориентир — рядом с самолётом, мкр. Энка)';
 $addressShort = 'г. Краснодар, ул. Конечная, 2 (рядом с самолётом, мкр. Энка)';
 // Яндекс.Карты принимают координаты в порядке «долгота,широта».
-$mapLon      = '38.980850';
-$mapLat      = '45.083750';
+$mapLon      = '38.983550';
+$mapLat      = '45.080450';
 $mapEmbed    = 'https://yandex.ru/map-widget/v1/?ll=' . $mapLon . '%2C' . $mapLat
     . '&z=16&l=map&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
 $mapYandex   = 'https://yandex.ru/maps/?ll=' . $mapLon . '%2C' . $mapLat
