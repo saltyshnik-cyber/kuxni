@@ -126,55 +126,48 @@ if ($isAuthed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect('admin.php?tab=content');
 
             case 'save_photos':
-                $data   = content();
-                $posted = is_array($_POST['photos'] ?? null) ? $_POST['photos'] : [];
-                $photos = [];
-
-                foreach (array_keys(PHOTO_SLOTS) as $slot) {
-                    $path = (string)($posted[$slot] ?? '');
-                    $photos[$slot] = is_safe_upload_path($path) ? $path : '';
-                }
-
-                $data['photos'] = $photos;
-                save_content($data);
-                flash('ok', 'Раскладка фотографий обновлена.');
+                // Оставлено для совместимости со старыми формами; новая админка использует replace_photo.
                 redirect('admin.php?tab=photos');
 
-            case 'upload_photo':
+            case 'replace_photo':
+                $isAjax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+                $reply  = static function (bool $ok, string $message, string $path = '') use ($isAjax): void {
+                    if ($isAjax) {
+                        header('Content-Type: application/json; charset=utf-8');
+                        echo json_encode(['ok' => $ok, 'message' => $message, 'path' => $path], JSON_UNESCAPED_UNICODE);
+                        exit;
+                    }
+                    flash($ok ? 'ok' : 'err', $message);
+                    redirect('admin.php?tab=photos');
+                };
+
+                $slot = (string)($_POST['slot'] ?? '');
+                if (!isset(PHOTO_SLOTS[$slot])) {
+                    $reply(false, 'Неизвестный блок.');
+                }
+
                 try {
                     $path = save_uploaded_image($_FILES['photo'] ?? []);
                     if ($path === null) {
-                        flash('err', 'Выберите файл для загрузки.');
-                        break;
+                        $reply(false, 'Выберите файл.');
                     }
-                    $slot = (string)($_POST['slot'] ?? '');
-                    if (isset(PHOTO_SLOTS[$slot])) {
-                        $data = content();
-                        $data['photos'][$slot] = $path;
-                        save_content($data);
+                    $data  = content();
+                    $old   = (string)($data['photos'][$slot] ?? '');
+                    $data['photos'][$slot] = $path;
+                    if (!save_content($data)) {
+                        $reply(false, 'Не удалось записать data/content.json');
                     }
-                    flash('ok', 'Фото загружено в uploads/.');
+                    if ($old !== '' && $old !== $path && is_safe_upload_path($old)
+                        && !in_array($old, array_values((array)$data['photos']), true)) {
+                        @unlink(APP_ROOT . '/' . $old);
+                    }
+                    $reply(true, 'Фото обновлено.', $path);
                 } catch (RuntimeException $exception) {
-                    flash('err', $exception->getMessage());
+                    $reply(false, $exception->getMessage());
                 }
-                redirect('admin.php?tab=photos');
+                break;
 
-            case 'delete_photo':
-                $path = (string)($_POST['path'] ?? '');
-                if (!is_safe_upload_path($path)) {
-                    flash('err', 'Файл не найден.');
-                    redirect('admin.php?tab=photos');
-                }
-                @unlink(APP_ROOT . '/' . $path);
-
-                $data = content();
-                foreach ((array)($data['photos'] ?? []) as $slot => $value) {
-                    if ($value === $path) {
-                        $data['photos'][$slot] = '';
-                    }
-                }
-                save_content($data);
-                flash('ok', 'Фото удалено.');
+            case 'upload_photo':
                 redirect('admin.php?tab=photos');
 
             case 'set_status':
