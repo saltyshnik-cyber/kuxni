@@ -228,15 +228,8 @@ function plain_field(array $c, string $path, string $label, int $rows = 4, strin
 
 $flashMessage = take_flash();
 $c            = content();
-$uploadFiles  = upload_files();
 $csrf         = csrf_token();
-$assigned     = [];
-
-foreach ((array)($c['photos'] ?? []) as $slot => $path) {
-    if ($path !== '' && isset(PHOTO_SLOTS[$slot])) {
-        $assigned[$path][] = PHOTO_SLOTS[$slot];
-    }
-}
+$slotPaths    = page_photos($c);
 ?>
 <!doctype html>
 <html lang="ru">
