@@ -344,9 +344,12 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <li><a href="<?= e($href) ?>"<?= str_starts_with($href, 'http') ? ' target="_blank" rel="noopener"' : '' ?>><span class="ic"><?= $icon($key) ?></span><span><small><?= e($label) ?></small><b><?= e($value) ?></b></span></a></li>
     <?php endforeach; ?>
   </ul>
+  <div class="mapbox">
+    <iframe src="<?= e($mapEmbed) ?>" title="Mebels.krd на карте: <?= e($addressShort) ?>" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+  </div>
   <div class="mapbtns">
-    <a href="https://yandex.ru/maps/?text=<?= rawurlencode('Краснодар, улица Конечная, 2') ?>" target="_blank" rel="noopener">Яндекс Карты</a>
-    <a href="https://2gis.ru/krasnodar/search/<?= rawurlencode('Конечная 2') ?>" target="_blank" rel="noopener">2ГИС</a>
+    <a href="<?= e($mapYandex) ?>" target="_blank" rel="noopener">Яндекс Карты</a>
+    <a href="<?= e($map2gis) ?>" target="_blank" rel="noopener">2ГИС</a>
   </div>
 </div></section>
 </main>
