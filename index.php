@@ -244,7 +244,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
 <div class="gal">
   <?php foreach ($slides as $i => $title): ?>
   <div class="slide">
-    <img src="<?= e($photo($i + 1)) ?>" alt="<?= e($title) ?>" loading="<?= $i === 0 ? 'eager' : 'lazy' ?>">
+    <img src="<?= e($slotPhoto('g' . ($i + 1), $i + 1)) ?>" alt="<?= e($title) ?>" loading="<?= $i === 0 ? 'eager' : 'lazy' ?>">
   </div>
   <?php endforeach; ?>
 </div>
