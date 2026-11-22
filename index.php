@@ -331,9 +331,12 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <li><a href="<?= e($href) ?>"<?= str_starts_with($href, 'http') ? ' target="_blank" rel="noopener"' : '' ?>><span class="ic"><?= $icon($key) ?></span><span><small><?= e($label) ?></small><b><?= e($value) ?></b></span></a></li>
     <?php endforeach; ?>
   </ul>
+  <div class="mapframe">
+    <iframe src="<?= e($yandexEmbed) ?>" title="Карта: <?= e($address) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+  </div>
   <div class="mapbtns">
-    <a href="https://yandex.ru/maps/?text=<?= rawurlencode('Краснодар, улица Конечная, 2') ?>" target="_blank" rel="noopener">Яндекс Карты</a>
-    <a href="https://2gis.ru/krasnodar/search/<?= rawurlencode('Конечная 2') ?>" target="_blank" rel="noopener">2ГИС</a>
+    <a href="<?= e($yandexMap) ?>" target="_blank" rel="noopener">Яндекс Карты</a>
+    <a href="<?= e($gisMap) ?>" target="_blank" rel="noopener">2ГИС</a>
   </div>
 </div></section>
 </main>
