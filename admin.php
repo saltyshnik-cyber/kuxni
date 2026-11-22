@@ -566,79 +566,108 @@ html,body{max-width:100%;overflow-x:hidden}
   </form>
 
 <?php else: ?>
-  <form class="panel" method="post" action="admin.php" enctype="multipart/form-data">
-    <h2>Загрузить фото</h2>
-    <input type="hidden" name="action" value="upload_photo">
-    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-    <input type="hidden" name="tab" value="photos">
-    <div class="grid">
-      <label class="field"><span>Файл <i>JPG, PNG или WebP · до 12 МБ</i></span>
-        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp,.jfif,.jpg" required>
-      </label>
-      <label class="field"><span>Сразу поставить в блок</span>
-        <select name="slot">
-          <option value="">— не назначать, встанет автоматически —</option>
-          <?php foreach (PHOTO_SLOTS as $slot => $label): ?>
-          <option value="<?= e($slot) ?>"><?= e($label) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </label>
-    </div>
-    <div style="margin-top:12px"><button class="btn" type="submit">Загрузить</button></div>
-  </form>
+  <p class="photos-intro">Нажмите «Изменить фото» в нужном блоке, выберите файл — он сразу загрузится и встанет на сайт. JPG, PNG или WebP, до 12 МБ.</p>
 
-  <form class="panel" method="post" action="admin.php">
-    <h2>Раскладка по блокам</h2>
-    <input type="hidden" name="action" value="save_photos">
-    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-    <input type="hidden" name="tab" value="photos">
-    <p class="muted" style="margin-bottom:14px">Свободные слоты заполняются автоматически файлами из <code>uploads/</code> — без повторов.</p>
-    <div class="slots">
-      <?php foreach (PHOTO_SLOTS as $slot => $label):
-          $current = (string)($c['photos'][$slot] ?? '');
+  <?php foreach (PHOTO_GROUPS as $group): ?>
+  <section class="pgroup">
+    <h2><?= e($group['title']) ?></h2>
+    <p class="ghint"><?= e($group['hint']) ?></p>
+    <div class="pcards">
+      <?php foreach ($group['slots'] as $slot):
+          $current = (string)($slotPaths[$slot] ?? '');
       ?>
-      <label class="slot"><span><?= e($label) ?></span>
-        <select name="photos[<?= e($slot) ?>]">
-          <option value="">— авто —</option>
-          <?php foreach ($uploadFiles as $file): ?>
-          <option value="<?= e($file) ?>"<?= $file === $current ? ' selected' : '' ?>><?= e(basename($file)) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </label>
-      <?php endforeach; ?>
-    </div>
-    <div style="margin-top:16px"><button class="btn" type="submit">Сохранить раскладку</button></div>
-  </form>
-
-  <div class="panel">
-    <h2>Файлы в uploads/ — <?= count($uploadFiles) ?></h2>
-    <?php if ($uploadFiles === []): ?>
-    <p class="muted">Папка пуста. Загрузите первое фото.</p>
-    <?php else: ?>
-    <div class="photos">
-      <?php foreach ($uploadFiles as $file): ?>
-      <div class="photo">
-        <img src="<?= e($file) ?>" alt="" loading="lazy" decoding="async">
-        <div class="body">
-          <code><?= e(basename($file)) ?></code>
-          <?php if (isset($assigned[$file])): ?>
-          <span class="used"><?= e(implode(', ', $assigned[$file])) ?></span>
+      <div class="pcard" data-slot="<?= e($slot) ?>">
+        <div class="pic">
+          <?php if ($current !== ''): ?>
+          <img src="<?= e($current) ?>" alt="<?= e(PHOTO_SLOTS[$slot]) ?>" loading="lazy" decoding="async">
           <?php else: ?>
-          <span class="muted">свободно — встанет в пустой слот</span>
+          <div class="empty">Фото не задано</div>
           <?php endif; ?>
-          <form method="post" action="admin.php" onsubmit="return confirm('Удалить файл?')" style="margin-top:auto">
-            <input type="hidden" name="action" value="delete_photo">
-            <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-            <input type="hidden" name="tab" value="photos">
-            <input type="hidden" name="path" value="<?= e($file) ?>">
-            <button class="btn danger" type="submit">Удалить</button>
-          </form>
+          <span class="state"><?= $current !== '' ? 'Сейчас на сайте' : 'Пусто' ?></span>
+        </div>
+        <div class="pbody">
+          <div class="ptitle"><?= e(PHOTO_SLOTS[$slot]) ?></div>
+          <div class="pratio"><?= e($group['hint']) ?></div>
+          <input type="file" accept="image/jpeg,image/png,image/webp,.jfif,.jpg" aria-label="Выбрать фото для блока «<?= e(PHOTO_SLOTS[$slot]) ?>»">
+          <button class="btn" type="button" data-pick>Изменить фото</button>
+          <div class="pnote" role="status" aria-live="polite"></div>
         </div>
       </div>
       <?php endforeach; ?>
     </div>
-    <?php endif; ?>
-  </div>
+  </section>
+  <?php endforeach; ?>
+
+  <script>
+  (function () {
+    var csrf = <?= json_encode($csrf) ?>;
+
+    document.querySelectorAll('.pcard').forEach(function (card) {
+      var input = card.querySelector('input[type="file"]');
+      var pick  = card.querySelector('[data-pick]');
+      var note  = card.querySelector('.pnote');
+      var pic   = card.querySelector('.pic');
+      var state = card.querySelector('.state');
+
+      var say = function (text, cls) { note.textContent = text; note.className = 'pnote' + (cls ? ' ' + cls : ''); };
+
+      pick.addEventListener('click', function () { input.click(); });
+
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) { return; }
+
+        var img = pic.querySelector('img');
+        if (!img) {
+          img = document.createElement('img');
+          img.alt = '';
+          var empty = pic.querySelector('.empty');
+          if (empty) { empty.remove(); }
+          pic.insertBefore(img, state);
+        }
+        var local = URL.createObjectURL(file);
+        img.src = local;
+        state.textContent = 'Загружаем…';
+        pick.disabled = true;
+        say('');
+
+        var body = new FormData();
+        body.append('action', 'replace_photo');
+        body.append('csrf', csrf);
+        body.append('tab', 'photos');
+        body.append('slot', card.dataset.slot);
+        body.append('photo', file);
+
+        fetch('admin.php', {
+          method: 'POST',
+          body: body,
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data && data.ok) {
+              img.src = data.path + '?v=' + Date.now();
+              state.textContent = 'Сейчас на сайте';
+              say(data.message || 'Фото обновлено.', 'ok');
+            } else {
+              state.textContent = 'Не загружено';
+              say((data && data.message) || 'Не удалось загрузить фото.', 'err');
+            }
+          })
+          .catch(function () {
+            state.textContent = 'Не загружено';
+            say('Проблема со связью, попробуйте ещё раз.', 'err');
+          })
+          .finally(function () {
+            pick.disabled = false;
+            input.value = '';
+            URL.revokeObjectURL(local);
+          });
+      });
+    });
+  })();
+  </script>
 <?php endif; ?>
 </div>
 </body>
