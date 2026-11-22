@@ -16,6 +16,19 @@ $fallbackPhoto = 'data:image/svg+xml;charset=utf-8,' . rawurlencode(
 
 $photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $realPhotos[$i % count($realPhotos)];
 
+/* Фото, выбранные в админке (content.json -> photos), важнее автоподстановки. */
+$slotPhotos = page_photos(content());
+$slotPhoto  = static fn(string $slot, int $fallbackIndex): string =>
+    ($slotPhotos[$slot] ?? '') !== '' ? $slotPhotos[$slot] : $photo($fallbackIndex);
+
+$address     = 'г. Краснодар, ул. Конечная, 2 (ориентир — рядом с самолётом, мкр. Энка)';
+$addressShort = 'г. Краснодар, ул. Конечная, 2 (рядом с самолётом, мкр. Энка)';
+$mapLat      = '45.0846';
+$mapLon      = '38.9832';
+$yandexMap   = 'https://yandex.ru/maps/?ll=' . $mapLon . '%2C' . $mapLat . '&z=17&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
+$yandexEmbed = 'https://yandex.ru/map-widget/v1/?ll=' . $mapLon . '%2C' . $mapLat . '&z=17&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
+$gisMap      = 'https://2gis.ru/krasnodar?m=' . $mapLon . '%2C' . $mapLat . '%2F17';
+
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
     'Большой проект, ЖК «Большой»',
