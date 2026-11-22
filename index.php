@@ -286,11 +286,11 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
   <h2 class="h2">Кухни<em>на заказ</em></h2>
   <div class="kgrid">
     <figure class="wide">
-      <img src="<?= e($photo(10)) ?>" alt="Угловая кухня в белом и графитовом" loading="lazy">
+      <img src="<?= e($slotPhoto('k1', 10)) ?>" alt="Угловая кухня в белом и графитовом" loading="lazy">
       <div class="kprice"><small>Под ключ</small><b>от 100 тыс. ₽</b><span>Проект, материалы, фурнитура и монтаж</span></div>
     </figure>
-    <figure><img src="<?= e($photo(11)) ?>" alt="Кухня с деревянной столешницей" loading="lazy"></figure>
-    <figure><img src="<?= e($photo(12)) ?>" alt="Кухня с фрезерованными фасадами" loading="lazy"></figure>
+    <figure><img src="<?= e($slotPhoto('k2', 11)) ?>" alt="Кухня с деревянной столешницей" loading="lazy"></figure>
+    <figure><img src="<?= e($slotPhoto('k3', 12)) ?>" alt="Кухня с фрезерованными фасадами" loading="lazy"></figure>
     <figure><img src="<?= e($photo(13)) ?>" alt="Кухня с встроенной техникой" loading="lazy"></figure>
     <figure><img src="<?= e($photo(14)) ?>" alt="Кухня с подсветкой рабочей зоны" loading="lazy"></figure>
   </div>
