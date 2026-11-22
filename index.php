@@ -24,7 +24,23 @@ $withVersion = static function (string $path): string {
 
 $photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $withVersion($realPhotos[$i % count($realPhotos)]);
 
-$heroPhoto = ($slotPhotos['hero'] ?? '') !== '' ? $withVersion($slotPhotos['hero']) : $photo(0);
+$slotPhoto = static function (string $slot, int $fallbackIndex) use ($slotPhotos, $withVersion, $photo): string {
+    $path = (string)($slotPhotos[$slot] ?? '');
+
+    return $path !== '' ? $withVersion($path) : $photo($fallbackIndex);
+};
+
+$heroPhoto = $slotPhoto('hero', 0);
+
+$address     = 'г. Краснодар, ул. Конечная, 2 (ориентир — рядом с самолётом, мкр. Энка)';
+$addressShort = 'г. Краснодар, ул. Конечная, 2 (рядом с самолётом, мкр. Энка)';
+$mapLat      = '45.0846';
+$mapLon      = '38.9832';
+$mapEmbed    = 'https://yandex.ru/map-widget/v1/?ll=' . $mapLon . '%2C' . $mapLat
+    . '&z=17&l=map&pt=' . $mapLon . '%2C' . $mapLat . '%2Cpm2rdm';
+$mapYandex   = 'https://yandex.ru/maps/?ll=' . $mapLon . '%2C' . $mapLat
+    . '&z=17&pt=' . $mapLon . '%2C' . $mapLat . '%2Cpm2rdm';
+$map2gis     = 'https://2gis.ru/krasnodar?m=' . $mapLon . '%2C' . $mapLat . '%2F17';
 
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
