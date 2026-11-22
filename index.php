@@ -175,7 +175,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
 </head>
 <body>
 <header class="header" id="hdr"><div class="container">
-  <a class="brand" href="#top"><span class="mark">MK</span><span><b>MEBELS.KRD</b><small>Мебель на заказ · Краснодар</small></span></a>
+  <a class="brand" href="#top"><span class="mark">MK</span><span><b>MEBELS.KRD</b><small>Конечная, 2 · рядом с самолётом, Энка</small></span></a>
   <nav class="nav"><a href="#works">Работы</a><a href="#kinds">Что делаем</a><a href="#kitchens">Кухни</a><a href="#reviews">Отзывы</a><a href="#contacts">Контакты</a></nav>
   <button class="btn btn-oak tel" type="button" data-modal-open onclick="return openLead();">Заявка на просчёт</button>
   <button class="burger" type="button" data-menu-open aria-label="Меню"><i></i></button>
