@@ -37,8 +37,7 @@ $addressShort = 'г. Краснодар, ул. Конечная, 2 (рядом �
 // Яндекс.Карты принимают координаты в порядке «долгота,широта».
 $mapLon      = '38.983550';
 $mapLat      = '45.080450';
-$mapEmbed    = 'https://yandex.ru/map-widget/v1/?ll=' . $mapLon . '%2C' . $mapLat
-    . '&z=16&l=map&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
+$mapEmbed    = 'https://yandex.ru/map-widget/v1/?text=' . rawurlencode('Краснодар, улица Конечная, 2') . '&z=16';
 $mapYandex   = 'https://yandex.ru/maps/?ll=' . $mapLon . '%2C' . $mapLat
     . '&z=16&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
 $map2gis     = 'https://2gis.ru/krasnodar?m=' . $mapLon . '%2C' . $mapLat . '%2F16';
