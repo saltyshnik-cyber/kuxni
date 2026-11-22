@@ -1,11 +1,13 @@
 """Сбор базы живых русскоязычных Telegram-каналов для партнёрства и розыгрышей.
 
-Работает без Telegram API и api_id: кандидаты берутся из открытых каталогов
-и поисковой выдачи, качество проверяется по публичной веб-версии канала.
+Telegram API и api_id не нужны: кандидаты берутся из поисковой выдачи (ddgs)
+и открытых GitHub-подборок, качество проверяется по публичной веб-версии
+канала https://t.me/s/<username>. Готовый CSV отправляется боту в Telegram.
 """
 from __future__ import annotations
 
 import csv
+import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -15,30 +17,61 @@ from urllib.parse import quote, unquote
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    from ddgs import DDGS
+except ImportError:  # старый пакет, если ddgs ещё не установлен
+    from duckduckgo_search import DDGS
+
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_FILE = BASE_DIR / "channels.csv"
+ENV_FILE = BASE_DIR / ".env"
 
-KEYWORDS = [
-    "нейросети",
-    "искусственный интеллект",
-    "claude",
-    "вайбкодинг",
-    "cursor",
-    "программирование",
-    "фриланс",
-    "маркетинг",
-    "стартапы",
+# ---------- Что искать ----------
+
+SEARCH_QUERIES = [
+    "site:t.me/s/ нейросети",
+    "site:t.me/s/ искусственный интеллект",
+    "site:t.me/s/ claude",
+    "site:t.me/s/ вайбкодинг",
+    "site:t.me/s/ программирование",
+    "site:t.me/s/ фриланс",
+    "site:t.me/s/ маркетинг",
+    "site:t.me/s/ стартапы",
+    "site:tgstat.ru/channel нейросети",
+    "site:tgstat.ru/channel программирование",
+    "site:tgstat.ru/channel маркетинг",
 ]
+RESULTS_PER_QUERY = 50
+
+# Известные подборки — их читаем напрямую из raw.
+GITHUB_RAW_LISTS = [
+    "https://raw.githubusercontent.com/abvc/everything-about-telegram-channels/main/README.md",
+    "https://raw.githubusercontent.com/GooKv/awesome-telegram-channels/main/README.md",
+    "https://raw.githubusercontent.com/sindresorhus/awesome/main/readme.md",
+    "https://raw.githubusercontent.com/maxmouchet/awesome-telegram/main/README.md",
+]
+GITHUB_REPO_QUERIES = [
+    "awesome telegram channels",
+    "telegram channels list russian",
+    "awesome russian telegram",
+    "telegram catalog channels",
+]
+GITHUB_REPOS_PER_QUERY = 10
+
+# ---------- Пороги отбора ----------
 
 MIN_SUBSCRIBERS = 500
 MAX_SUBSCRIBERS = 25_000
-MAX_POST_AGE_DAYS = 7
-MIN_ENGAGEMENT_PCT = 15.0     # средние просмотры / подписчики, %
+MAX_POST_AGE_DAYS = 10
+MIN_ENGAGEMENT_PCT = 12.0     # средние просмотры / подписчики, %
 POSTS_FOR_ENGAGEMENT = 5      # по скольким последним постам считаем просмотры
 MIN_CYRILLIC_SHARE = 0.3      # доля кириллицы среди букв в названии + описании
-REQUEST_DELAY = 2.0           # секунд после каждого запроса
+REQUEST_DELAY = 2.0           # секунд после каждого запроса к t.me
 TIMEOUT = 25
 MAX_RETRIES = 3
+
+# Сколько каналов максимум проверять за прогон (None — без ограничения).
+MAX_CHECKS: int | None = None
 
 CSV_COLUMNS = [
     "Название канала",
@@ -50,38 +83,67 @@ CSV_COLUMNS = [
     "Описание канала",
 ]
 
+USERNAME_PART = r"[A-Za-z][A-Za-z0-9_]{4,31}"
+
+TME_RE = re.compile(rf"t\.me/(?:s/)?({USERNAME_PART})")
+MENTION_RE = re.compile(rf"(?<![\w/@.])@({USERNAME_PART.with_args if False else USERNAME_PART})\b")
+TGSTAT_RE = re.compile(rf"tgstat\.ru/(?:channel|chat)/@?({USERNAME_PART})")
+COUNT_RE = re.compile(r"([\d\s.,]+)\s*(k|m|тыс\.?|млн\.?)?")
+
+# Служебные пути Telegram, которые не являются каналами.
+RESERVED = {
+    "s", "joinchat", "addstickers", "share", "proxy", "socks", "iv",
+    "setlanguage", "login", "durov", "telegram", "telegramtips", "contact",
+}
+
 SESSION = requests.Session()
 SESSION.headers.update({
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.7",
 })
 
-TME_RE = re.compile(r"t\.me/(?:s/)?([A-Za-z][A-Za-z0-9_]{4,31})")
-TLGRM_RE = re.compile(r"tlgrm\.ru/channels/@([A-Za-z][A-Za-z0-9_]{4,31})")
-MENTION_RE = re.compile(r"(?<![\w/@.])@([A-Za-z][A-Za-z0-9_]{3,31})\b")
-COUNT_RE = re.compile(r"([\d\s.,]+)\s*(k|m|тыс\.?|млн\.?)?")
 
-# Служебные пути Telegram, которые не являются каналами.
-RESERVED = {
-    "s", "joinchat", "addstickers", "share", "proxy", "socks",
-    "iv", "setlanguage", "login", "durov", "telegram",
-}
+# ---------- .env ----------
+
+def load_env(path: Path = ENV_FILE) -> None:
+    """Подхватывает .env в переменные окружения, не перетирая уже заданные."""
+    if not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line == "" or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
 
 
-def fetch(url: str) -> str | None:
+load_env()
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "").strip()
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
+
+
+# ---------- Сеть ----------
+
+def fetch(url: str, *, delay: float = REQUEST_DELAY, headers: dict | None = None,
+          attempts: int = MAX_RETRIES) -> str | None:
     """GET с паузами и повторами. None, если страница недоступна."""
-    for attempt in range(1, MAX_RETRIES + 1):
+    for attempt in range(1, attempts + 1):
         try:
-            response = SESSION.get(url, timeout=TIMEOUT)
+            response = SESSION.get(url, timeout=TIMEOUT, headers=headers or {})
         except requests.RequestException as error:
-            print(f"    сеть: {type(error).__name__}, повтор {attempt}/{MAX_RETRIES}")
-            time.sleep(REQUEST_DELAY * attempt)
+            print(f"    сеть: {type(error).__name__}, повтор {attempt}/{attempts}")
+            time.sleep(delay * attempt)
             continue
 
-        time.sleep(REQUEST_DELAY)
+        if delay > 0:
+            time.sleep(delay)
 
         if response.status_code == 200:
             return response.text
@@ -90,7 +152,8 @@ def fetch(url: str) -> str | None:
         print(f"    HTTP {response.status_code}" + (", повтор" if retryable else ""))
         if not retryable:
             return None
-        time.sleep(REQUEST_DELAY * attempt)
+        time.sleep(delay * attempt)
+
     return None
 
 
@@ -98,6 +161,8 @@ def get_soup(url: str) -> BeautifulSoup | None:
     html = fetch(url)
     return BeautifulSoup(html, "html.parser") if html else None
 
+
+# ---------- Разбор чисел и текста ----------
 
 def parse_count(text: str) -> int:
     """«1 234», «12.3K», «1,2 тыс.» → целое число."""
@@ -131,13 +196,35 @@ def is_russian(text: str) -> bool:
     return len(cyrillic) / len(letters) >= MIN_CYRILLIC_SHARE
 
 
+def extract_usernames(text: str) -> set[str]:
+    """Все упоминания каналов в тексте: t.me/..., tgstat.ru/channel/..."""
+    decoded = unquote(text)
+    names: set[str] = set()
+
+    for pattern in (TME_RE, TGSTAT_RE):
+        for match in pattern.finditer(decoded):
+            name = match.group(1)
+            if name.lower() in RESERVED or name.isdigit():
+                continue
+            names.add(name)
+
+    return names
+
+
 def extract_contacts(description: str, own_username: str) -> list[str]:
+    """@username админов из описания канала, кроме самого канала."""
     own = own_username.lower()
     contacts: list[str] = []
     seen: set[str] = set()
 
     for match in MENTION_RE.finditer(description):
         name = match.group(1)
+        if name.lower() == own or name.lower() in seen or name.lower() in RESERVED:
+            continue
+        seen.add(name.lower())
+        contacts.append(f"@{name}")
+
+    for name in sorted(extract_usernames(description)):
         if name.lower() == own or name.lower() in seen:
             continue
         seen.add(name.lower())
@@ -146,53 +233,99 @@ def extract_contacts(description: str, own_username: str) -> list[str]:
     return contacts
 
 
-def catalog_links(keyword: str) -> list[tuple[str, str]]:
-    plain = quote(keyword, safe="")
-    site_query = quote(f"site:t.me {keyword}", safe="")
-    return [
-        ("tlgrm.ru", f"https://tlgrm.ru/search?q={plain}"),
-        ("telega.in", f"https://telega.in/catalog?q={plain}"),
-        ("duckduckgo", f"https://html.duckduckgo.com/html/?q={site_query}"),
-        ("ddg-lite", f"https://lite.duckduckgo.com/lite/?q={site_query}"),
-    ]
+# ---------- Источник 1: поисковая выдача ----------
 
-
-def extract_usernames(html: str) -> set[str]:
-    # unquote разворачивает редиректные ссылки поисковиков в прямые t.me/...
-    text = unquote(html)
+def search_usernames() -> set[str]:
     names: set[str] = set()
+    print(f"\n[поиск] запросов: {len(SEARCH_QUERIES)}")
 
-    for pattern in (TME_RE, TLGRM_RE):
-        for match in pattern.finditer(text):
-            name = match.group(1)
-            if name.lower() in RESERVED:
+    with DDGS() as ddgs:
+        for index, query in enumerate(SEARCH_QUERIES, 1):
+            print(f"[{index}/{len(SEARCH_QUERIES)}] {query}")
+            try:
+                try:
+                    results = ddgs.text(query, region="ru-ru", max_results=RESULTS_PER_QUERY)
+                except TypeError:
+                    results = ddgs.text(query, max_results=RESULTS_PER_QUERY)
+            except Exception as error:
+                print(f"    поиск не удался: {type(error).__name__}: {error}")
+                time.sleep(REQUEST_DELAY)
                 continue
-            names.add(name)
+
+            found: set[str] = set()
+            for result in results or []:
+                blob = " ".join(str(result.get(key, "")) for key in ("href", "title", "body"))
+                found |= extract_usernames(blob)
+                body = str(result.get("body", ""))
+                found |= {name for name in re.findall(rf"(?<![\w/@.])@({USERNAME_PART})\b", body)
+                          if name.lower() not in RESERVED}
+
+            names |= found
+            print(f"    результатов {len(results or [])}, новых каналов {len(found)}")
+            time.sleep(REQUEST_DELAY)
 
     return names
 
 
-def collect_candidates() -> list[str]:
-    found: dict[str, None] = {}
+# ---------- Источник 2: GitHub-подборки ----------
 
-    for index, keyword in enumerate(KEYWORDS, 1):
-        print(f"[поиск {index}/{len(KEYWORDS)}] «{keyword}»")
-        before = len(found)
+def github_headers() -> dict:
+    headers = {"Accept": "application/vnd.github+json"}
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+    return headers
 
-        for source, url in catalog_links(keyword):
-            html = fetch(url)
-            if html is None:
-                print(f"    {source}: недоступен")
+
+def github_readmes() -> list[str]:
+    """Ссылки на README подборок: известные списки + результаты поиска репозиториев."""
+    urls = list(GITHUB_RAW_LISTS)
+
+    for query in GITHUB_REPO_QUERIES:
+        api = (
+            "https://api.github.com/search/repositories?q="
+            + quote(query, safe="") + f"&sort=stars&per_page={GITHUB_REPOS_PER_QUERY}"
+        )
+        print(f"[github] {query}")
+        raw = fetch(api, delay=1.0, headers=github_headers(), attempts=2)
+        if raw is None:
+            continue
+
+        try:
+            import json
+            items = json.loads(raw).get("items", [])
+        except ValueError:
+            print("    ответ не JSON")
+            continue
+
+        for repo in items:
+            full_name = repo.get("full_name", "")
+            branch = repo.get("default_branch", "main")
+            if not full_name:
                 continue
-            names = extract_usernames(html)
-            for name in names:
-                found.setdefault(name, None)
-            print(f"    {source}: ссылок {len(names)}")
+            for name in ("README.md", "readme.md", "README.MD"):
+                urls.append(f"https://raw.githubusercontent.com/{full_name}/{branch}/{name}")
 
-        print(f"    новых: {len(found) - before}, всего кандидатов: {len(found)}")
+    return urls
 
-    return list(found)
 
+def github_usernames() -> set[str]:
+    names: set[str] = set()
+    readmes = github_readmes()
+    print(f"\n[github] подборок к чтению: {len(readmes)}")
+
+    for index, url in enumerate(readmes, 1):
+        html = fetch(url, delay=0.5, headers=github_headers(), attempts=2)
+        if html is None:
+            continue
+        found = extract_usernames(html)
+        names |= found
+        if found:
+            print(f"[{index}/{len(readmes)}] {url.rpartition('/')[0]}: каналов {len(found)}")
+
+    return names
+
+
+# ---------- Проверка канала ----------
 
 def parse_subscribers(info: BeautifulSoup) -> int | None:
     for counter in info.select("div.tgme_channel_info_counter"):
@@ -291,6 +424,8 @@ def check_channel(username: str) -> dict | None:
     }
 
 
+# ---------- Результат ----------
+
 def save_csv(rows: list[dict]) -> None:
     with open(OUTPUT_FILE, "w", encoding="utf-8-sig", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=CSV_COLUMNS)
@@ -299,19 +434,58 @@ def save_csv(rows: list[dict]) -> None:
     print(f"Сохранено каналов: {len(rows)} → {OUTPUT_FILE}")
 
 
+def send_to_telegram(rows: list[dict]) -> None:
+    if not BOT_TOKEN or not ADMIN_CHAT_ID:
+        print("Отправка в Telegram пропущена: нет BOT_TOKEN или ADMIN_CHAT_ID в .env")
+        return
+    if not OUTPUT_FILE.is_file():
+        print("Отправка в Telegram пропущена: файл channels.csv не создан")
+        return
+
+    average = sum(row["Вовлечённость %"] for row in rows) / len(rows) if rows else 0
+    caption = (
+        f"Каналов в базе: {len(rows)}\n"
+        f"Средняя вовлечённость: {average:.1f}%\n"
+        f"Отбор: {MIN_SUBSCRIBERS}–{MAX_SUBSCRIBERS} подписчиков, "
+        f"пост не старше {MAX_POST_AGE_DAYS} дней, просмотры ≥ {MIN_ENGAGEMENT_PCT:.0f}%"
+    )
+
+    try:
+        with open(OUTPUT_FILE, "rb") as document:
+            response = SESSION.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
+                data={"chat_id": ADMIN_CHAT_ID, "caption": caption[:1024]},
+                files={"document": (OUTPUT_FILE.name, document, "text/csv")},
+                timeout=120,
+            )
+    except requests.RequestException as error:
+        print(f"Отправка не удалась: {type(error).__name__}: {error}")
+        return
+
+    if response.status_code != 200:
+        print(f"Отправка не удалась: HTTP {response.status_code} {response.text[:200]}")
+        return
+
+    print(f"Файл отправлен в Telegram (chat_id {ADMIN_CHAT_ID}).")
+
+
 def main() -> None:
     rows: list[dict] = []
 
     try:
-        candidates = collect_candidates()
-        total = len(candidates)
+        candidates = search_usernames() | github_usernames()
+        ordered = sorted(candidates, key=str.lower)
+        if MAX_CHECKS is not None:
+            ordered = ordered[:MAX_CHECKS]
+
+        total = len(ordered)
         if total == 0:
-            print("Кандидаты не найдены: каталоги и поисковики не отдали ссылки.")
+            print("Кандидаты не найдены: поисковик и GitHub не отдали ссылки.")
             return
 
-        print(f"\nКандидатов на проверку: {total}\n")
+        print(f"\nУникальных кандидатов на проверку: {total}\n")
 
-        for index, username in enumerate(candidates, 1):
+        for index, username in enumerate(ordered, 1):
             print(f"[проверка {index}/{total}] @{username}")
             row = check_channel(username)
             if row is not None:
@@ -323,6 +497,7 @@ def main() -> None:
         rows.sort(key=lambda row: row["Вовлечённость %"], reverse=True)
         if rows:
             save_csv(rows)
+            send_to_telegram(rows)
         else:
             print("Подходящих каналов не найдено.")
 
