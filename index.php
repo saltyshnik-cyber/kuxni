@@ -28,7 +28,7 @@ $slotPhoto = static function (string $slot, int $fallbackIndex) use ($photos, $p
 
 $mapLon     = '38.974837';
 $mapLat     = '45.095560';
-$address    = 'г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2';
+$address    = 'г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2, 2 этаж';
 $mapWidget  = 'https://yandex.ru/map-widget/v1/?ll=' . rawurlencode("$mapLon,$mapLat") . '&z=16&pt=' . rawurlencode("$mapLon,$mapLat,pm2rdm");
 $mapYandex  = 'https://yandex.ru/maps/-/CXcJfOn1';
 $map2gis    = 'https://2gis.ru/krasnodar?m=' . rawurlencode("$mapLon,$mapLat") . '%2F16';
