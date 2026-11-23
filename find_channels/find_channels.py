@@ -1,18 +1,19 @@
-"""Сбор базы живых русскоязычных Telegram-каналов для партнёрства и розыгрышей.
+"""Сбор двух баз русскоязычных Telegram-каналов для партнёрства.
 
-Telegram API и api_id не нужны: кандидаты берутся из поисковой выдачи (ddgs)
-и открытых GitHub-подборок, качество проверяется по публичной веб-версии
-канала https://t.me/s/<username>. Готовый CSV отправляется боту в Telegram.
+channels_outreach.csv — 150..15 000 подписчиков, обязательный контакт админа.
+channels_comments.csv — 3 000..200 000 подписчиков, крупные AI/tech-каналы.
+
+Telegram API не нужен: кандидаты берутся из выдачи ddgs, качество
+проверяется по публичной веб-версии https://t.me/s/<username>.
 """
 from __future__ import annotations
 
 import csv
-import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -23,55 +24,62 @@ except ImportError:  # старый пакет, если ddgs ещё не уст
     from duckduckgo_search import DDGS
 
 BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_FILE = BASE_DIR / "channels.csv"
-ENV_FILE = BASE_DIR / ".env"
+OUTREACH_FILE = BASE_DIR / "channels_outreach.csv"
+COMMENTS_FILE = BASE_DIR / "channels_comments.csv"
 
 # ---------- Что искать ----------
 
 SEARCH_QUERIES = [
     "site:t.me/s/ нейросети",
+    "site:t.me нейросети",
     "site:t.me/s/ искусственный интеллект",
-    "site:t.me/s/ claude",
+    "site:t.me искусственный интеллект",
     "site:t.me/s/ вайбкодинг",
+    "site:t.me вайбкодинг",
+    "site:t.me/s/ claude",
+    "site:t.me claude код",
+    "site:t.me/s/ cursor",
+    "site:t.me chatgpt",
+    "site:t.me midjourney",
+    "site:t.me промпты",
+    "site:t.me нейросети для бизнеса",
+    "site:t.me автоматизация бизнеса",
+    "site:t.me боты без кода",
+    "site:t.me создание сайтов на нейросетях",
+    "site:t.me фриланс нейросети",
+    "site:t.me заработок на нейросетях",
+    "site:t.me инди разработчик",
+    "site:t.me соло разработчик",
+    "site:t.me инди мейкер",
+    "site:t.me n8n",
+    "site:t.me no-code",
+    "site:t.me маркетинг нейросети",
     "site:t.me/s/ программирование",
     "site:t.me/s/ фриланс",
     "site:t.me/s/ маркетинг",
     "site:t.me/s/ стартапы",
     "site:tgstat.ru/channel нейросети",
+    "site:tgstat.ru/channel вайбкодинг",
     "site:tgstat.ru/channel программирование",
-    "site:tgstat.ru/channel маркетинг",
 ]
 RESULTS_PER_QUERY = 50
 
-# Известные подборки — их читаем напрямую из raw.
-GITHUB_RAW_LISTS = [
-    "https://raw.githubusercontent.com/abvc/everything-about-telegram-channels/main/README.md",
-    "https://raw.githubusercontent.com/GooKv/awesome-telegram-channels/main/README.md",
-    "https://raw.githubusercontent.com/sindresorhus/awesome/main/readme.md",
-    "https://raw.githubusercontent.com/maxmouchet/awesome-telegram/main/README.md",
-]
-GITHUB_REPO_QUERIES = [
-    "awesome telegram channels",
-    "telegram channels list russian",
-    "awesome russian telegram",
-    "telegram catalog channels",
-]
-GITHUB_REPOS_PER_QUERY = 10
-
 # ---------- Пороги отбора ----------
 
-MIN_SUBSCRIBERS = 500
-MAX_SUBSCRIBERS = 25_000
+OUTREACH_MIN_SUBSCRIBERS = 150
+OUTREACH_MAX_SUBSCRIBERS = 15_000
+COMMENTS_MIN_SUBSCRIBERS = 3_000
+COMMENTS_MAX_SUBSCRIBERS = 200_000
 MAX_POST_AGE_DAYS = 10
-MIN_ENGAGEMENT_PCT = 12.0     # средние просмотры / подписчики, %
-POSTS_FOR_ENGAGEMENT = 5      # по скольким последним постам считаем просмотры
-MIN_CYRILLIC_SHARE = 0.3      # доля кириллицы среди букв в названии + описании
-REQUEST_DELAY = 2.0           # секунд после каждого запроса к t.me
+MIN_CYRILLIC_SHARE = 0.3
+REQUEST_DELAY = 1.8          # секунд после каждого запроса к t.me
 TIMEOUT = 25
 MAX_RETRIES = 3
+POSTS_FOR_VIEWS = 5          # по скольким последним постам считаем просмотры
 
-# Сколько каналов максимум проверять за прогон (None — без ограничения).
-MAX_CHECKS: int | None = None
+OUTREACH_TARGET = 60         # сколько каналов набрать в базу рассылки
+COMMENTS_TARGET = 40         # сколько каналов набрать в базу для комментариев
+MAX_CHECKS = 400             # страховка от бесконечного прогона
 
 CSV_COLUMNS = [
     "Название канала",
@@ -83,12 +91,32 @@ CSV_COLUMNS = [
     "Описание канала",
 ]
 
-USERNAME_PART = r"[A-Za-z][A-Za-z0-9_]{4,31}"
+# ---------- Регулярки ----------
 
+USERNAME_PART = r"[A-Za-z][A-Za-z0-9_]{4,31}"
 TME_RE = re.compile(rf"t\.me/(?:s/)?({USERNAME_PART})")
-MENTION_RE = re.compile(rf"(?<![\w/@.])@({USERNAME_PART.with_args if False else USERNAME_PART})\b")
 TGSTAT_RE = re.compile(rf"tgstat\.ru/(?:channel|chat)/@?({USERNAME_PART})")
+CONTACT_RE = re.compile(r"(?<![\w/@.])@([A-Za-z][A-Za-z0-9_]{3,31})\b")
 COUNT_RE = re.compile(r"([\d\s.,]+)\s*(k|m|тыс\.?|млн\.?)?")
+
+KZ_RE = re.compile(r"\.kz\b|казахстан|астан[аеы]|алмат[ыае]|казах|караганда|шымкент", re.I)
+VACANCY_RE = re.compile(r"ваканси|резюме|hh\.ru|ищем\s+сотрудник|работа\s+в\s+|подработк", re.I)
+NEWS_RE = re.compile(r"новост|news|дайджест", re.I)
+
+OUTREACH_RE = re.compile(
+    r"вайб[- ]?код|vibe[- ]?cod|нейро|нейронк|\bии\b|\bai\b|chatgpt|\bgpt\b|claude|midjourney"
+    r"|промпт|prompt|no[- ]?code|low[- ]?code|n8n|zapier|cursor|tilda|\bбот[а-яё]*|сайт[а-яё]*"
+    r"|лендинг|автоматизац|фриланс|заработ[а-яё]*|доход|инди|соло[- ]?разработ|мейкер|стартап"
+    r"|маркетинг|\bsmm\b|продвижен|воронк|python|разработ[а-яё]*|программирован",
+    re.I,
+)
+
+COMMENTS_RE = re.compile(
+    r"нейро|нейронк|\bии\b|\bai\b|искусственн\w*\s+интеллект|chatgpt|\bgpt\b|claude|midjourney"
+    r"|вайб[- ]?код|vibe[- ]?cod|\bcursor\b|\bllm\b|промпт|prompt|no[- ]?code|автоматизац"
+    r"|технолог|разработ|программирован|digital|\bит\b",
+    re.I,
+)
 
 # Служебные пути Telegram, которые не являются каналами.
 RESERVED = {
@@ -106,37 +134,13 @@ SESSION.headers.update({
 })
 
 
-# ---------- .env ----------
-
-def load_env(path: Path = ENV_FILE) -> None:
-    """Подхватывает .env в переменные окружения, не перетирая уже заданные."""
-    if not path.is_file():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if line == "" or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
-
-
-load_env()
-
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "").strip()
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
-
-
 # ---------- Сеть ----------
 
-def fetch(url: str, *, delay: float = REQUEST_DELAY, headers: dict | None = None,
-          attempts: int = MAX_RETRIES) -> str | None:
-    """GET с паузами и повторами. None, если страница недоступна."""
+def fetch(url: str, *, delay: float = REQUEST_DELAY, attempts: int = MAX_RETRIES) -> str | None:
+    """GET с паузой и повторами. None, если страница недоступна."""
     for attempt in range(1, attempts + 1):
         try:
-            response = SESSION.get(url, timeout=TIMEOUT, headers=headers or {})
+            response = SESSION.get(url, timeout=TIMEOUT)
         except requests.RequestException as error:
             print(f"    сеть: {type(error).__name__}, повтор {attempt}/{attempts}")
             time.sleep(delay * attempt)
@@ -162,7 +166,7 @@ def get_soup(url: str) -> BeautifulSoup | None:
     return BeautifulSoup(html, "html.parser") if html else None
 
 
-# ---------- Разбор чисел и текста ----------
+# ---------- Разбор текста и чисел ----------
 
 def parse_count(text: str) -> int:
     """«1 234», «12.3K», «1,2 тыс.» → целое число."""
@@ -212,20 +216,14 @@ def extract_usernames(text: str) -> set[str]:
 
 
 def extract_contacts(description: str, own_username: str) -> list[str]:
-    """@username админов из описания канала, кроме самого канала."""
+    """@username из описания канала, кроме самого канала."""
     own = own_username.lower()
     contacts: list[str] = []
     seen: set[str] = set()
 
-    for match in MENTION_RE.finditer(description):
+    for match in CONTACT_RE.finditer(description):
         name = match.group(1)
         if name.lower() == own or name.lower() in seen or name.lower() in RESERVED:
-            continue
-        seen.add(name.lower())
-        contacts.append(f"@{name}")
-
-    for name in sorted(extract_usernames(description)):
-        if name.lower() == own or name.lower() in seen:
             continue
         seen.add(name.lower())
         contacts.append(f"@{name}")
@@ -233,7 +231,7 @@ def extract_contacts(description: str, own_username: str) -> list[str]:
     return contacts
 
 
-# ---------- Источник 1: поисковая выдача ----------
+# ---------- Источник кандидатов ----------
 
 def search_usernames() -> set[str]:
     names: set[str] = set()
@@ -247,80 +245,25 @@ def search_usernames() -> set[str]:
                     results = ddgs.text(query, region="ru-ru", max_results=RESULTS_PER_QUERY)
                 except TypeError:
                     results = ddgs.text(query, max_results=RESULTS_PER_QUERY)
+                results = list(results or [])
             except Exception as error:
                 print(f"    поиск не удался: {type(error).__name__}: {error}")
                 time.sleep(REQUEST_DELAY)
                 continue
 
             found: set[str] = set()
-            for result in results or []:
+            for result in results:
                 blob = " ".join(str(result.get(key, "")) for key in ("href", "title", "body"))
                 found |= extract_usernames(blob)
                 body = str(result.get("body", ""))
-                found |= {name for name in re.findall(rf"(?<![\w/@.])@({USERNAME_PART})\b", body)
-                          if name.lower() not in RESERVED}
+                found |= {
+                    name for name in CONTACT_RE.findall(body)
+                    if name.lower() not in RESERVED
+                }
 
             names |= found
-            print(f"    результатов {len(results or [])}, новых каналов {len(found)}")
+            print(f"    результатов {len(results)}, новых каналов {len(found)}")
             time.sleep(REQUEST_DELAY)
-
-    return names
-
-
-# ---------- Источник 2: GitHub-подборки ----------
-
-def github_headers() -> dict:
-    headers = {"Accept": "application/vnd.github+json"}
-    if GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-    return headers
-
-
-def github_readmes() -> list[str]:
-    """Ссылки на README подборок: известные списки + результаты поиска репозиториев."""
-    urls = list(GITHUB_RAW_LISTS)
-
-    for query in GITHUB_REPO_QUERIES:
-        api = (
-            "https://api.github.com/search/repositories?q="
-            + quote(query, safe="") + f"&sort=stars&per_page={GITHUB_REPOS_PER_QUERY}"
-        )
-        print(f"[github] {query}")
-        raw = fetch(api, delay=1.0, headers=github_headers(), attempts=2)
-        if raw is None:
-            continue
-
-        try:
-            import json
-            items = json.loads(raw).get("items", [])
-        except ValueError:
-            print("    ответ не JSON")
-            continue
-
-        for repo in items:
-            full_name = repo.get("full_name", "")
-            branch = repo.get("default_branch", "main")
-            if not full_name:
-                continue
-            for name in ("README.md", "readme.md", "README.MD"):
-                urls.append(f"https://raw.githubusercontent.com/{full_name}/{branch}/{name}")
-
-    return urls
-
-
-def github_usernames() -> set[str]:
-    names: set[str] = set()
-    readmes = github_readmes()
-    print(f"\n[github] подборок к чтению: {len(readmes)}")
-
-    for index, url in enumerate(readmes, 1):
-        html = fetch(url, delay=0.5, headers=github_headers(), attempts=2)
-        if html is None:
-            continue
-        found = extract_usernames(html)
-        names |= found
-        if found:
-            print(f"[{index}/{len(readmes)}] {url.rpartition('/')[0]}: каналов {len(found)}")
 
     return names
 
@@ -362,7 +305,8 @@ def parse_posts(soup: BeautifulSoup) -> list[dict]:
     return posts
 
 
-def check_channel(username: str) -> dict | None:
+def inspect_channel(username: str) -> dict | None:
+    """Забирает из веб-превью всё, что нужно для отбора. None — если это не канал."""
     soup = get_soup(f"https://t.me/s/{username}")
     if soup is None:
         return None
@@ -380,126 +324,150 @@ def check_channel(username: str) -> dict | None:
     if subscribers is None:
         print("    пропуск: подписчики скрыты")
         return None
-    if not MIN_SUBSCRIBERS <= subscribers <= MAX_SUBSCRIBERS:
-        print(f"    пропуск: подписчиков {subscribers}")
-        return None
 
     description_el = info.select_one(".tgme_channel_info_description")
     description = description_el.get_text(" ", strip=True) if description_el else ""
     description = " ".join(description.split())
-
-    if not is_russian(f"{title} {description}"):
-        print("    пропуск: не русскоязычный")
-        return None
 
     posts = parse_posts(soup)
     if not posts:
         print("    пропуск: нет постов в веб-версии")
         return None
 
-    last_post = posts[-1]["date"]
-    if last_post < datetime.now(timezone.utc) - timedelta(days=MAX_POST_AGE_DAYS):
-        print(f"    пропуск: последний пост {last_post:%d.%m.%Y}")
-        return None
-
-    views = [post["views"] for post in posts if post["views"] > 0][-POSTS_FOR_ENGAGEMENT:]
-    if not views:
-        print("    пропуск: просмотры скрыты")
-        return None
-
-    average_views = sum(views) / len(views)
-    engagement = average_views / subscribers * 100
-    if engagement < MIN_ENGAGEMENT_PCT:
-        print(f"    пропуск: вовлечённость {engagement:.1f}%")
-        return None
+    views = [post["views"] for post in posts if post["views"] > 0][-POSTS_FOR_VIEWS:]
+    average_views = sum(views) / len(views) if views else 0
 
     return {
-        "Название канала": title,
-        "Ссылка на канал": f"https://t.me/{username}",
-        "Подписчики": subscribers,
-        "Средние просмотры": int(round(average_views)),
-        "Вовлечённость %": round(engagement, 1),
-        "Контакт админа": ", ".join(extract_contacts(description, username)),
-        "Описание канала": description,
+        "username": username,
+        "title": title,
+        "subscribers": subscribers,
+        "average_views": int(round(average_views)),
+        "engagement": round(average_views / subscribers * 100, 1) if subscribers else 0.0,
+        "contacts": extract_contacts(description, username),
+        "description": description,
+        "last_post": posts[-1]["date"],
+        "text": f"{title} {description}",
     }
 
 
-# ---------- Результат ----------
+def classify(channel: dict) -> str | None:
+    """Куда положить канал: outreach, comments или никуда."""
+    text = channel["text"]
 
-def save_csv(rows: list[dict]) -> None:
-    with open(OUTPUT_FILE, "w", encoding="utf-8-sig", newline="") as file:
+    if not is_russian(text):
+        print("    пропуск: не русскоязычный")
+        return None
+    if KZ_RE.search(text):
+        print("    пропуск: не российский канал")
+        return None
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_POST_AGE_DAYS)
+    if channel["last_post"] < cutoff:
+        print(f"    пропуск: последний пост {channel['last_post']:%d.%m.%Y}")
+        return None
+
+    subscribers = channel["subscribers"]
+    if (OUTREACH_MIN_SUBSCRIBERS <= subscribers <= OUTREACH_MAX_SUBSCRIBERS
+            and channel["contacts"]
+            and OUTREACH_RE.search(text)
+            and not VACANCY_RE.search(text)
+            and not NEWS_RE.search(channel["title"])):
+        return "outreach"
+
+    if (COMMENTS_MIN_SUBSCRIBERS <= subscribers <= COMMENTS_MAX_SUBSCRIBERS
+            and COMMENTS_RE.search(text)):
+        return "comments"
+
+    print("    пропуск: не подходит ни в одну базу")
+    return None
+
+
+# ---------- Сохранение ----------
+
+def ensure_csv(path: Path) -> None:
+    if path.is_file() and path.stat().st_size > 0:
+        return
+    with open(path, "w", encoding="utf-8-sig", newline="") as file:
+        csv.DictWriter(file, fieldnames=CSV_COLUMNS).writeheader()
+
+
+def append_row(path: Path, row: dict) -> None:
+    ensure_csv(path)
+    with open(path, "a", encoding="utf-8", newline="") as file:
+        csv.DictWriter(file, fieldnames=CSV_COLUMNS).writerow(row)
+
+
+def build_row(channel: dict) -> dict:
+    return {
+        "Название канала": channel["title"],
+        "Ссылка на канал": f"https://t.me/{channel['username']}",
+        "Подписчики": channel["subscribers"],
+        "Средние просмотры": channel["average_views"],
+        "Вовлечённость %": channel["engagement"],
+        "Контакт админа": ", ".join(channel["contacts"]),
+        "Описание канала": channel["description"],
+    }
+
+
+def sort_csv(path: Path) -> int:
+    """Пересортировывает готовый файл по убыванию вовлечённости. Возвращает число строк."""
+    if not path.is_file():
+        return 0
+    with open(path, encoding="utf-8-sig", newline="") as file:
+        rows = list(csv.DictReader(file))
+    if not rows:
+        return 0
+
+    rows.sort(key=lambda row: float(row["Вовлечённость %"]), reverse=True)
+    with open(path, "w", encoding="utf-8-sig", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=CSV_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
-    print(f"Сохранено каналов: {len(rows)} → {OUTPUT_FILE}")
-
-
-def send_to_telegram(rows: list[dict]) -> None:
-    if not BOT_TOKEN or not ADMIN_CHAT_ID:
-        print("Отправка в Telegram пропущена: нет BOT_TOKEN или ADMIN_CHAT_ID в .env")
-        return
-    if not OUTPUT_FILE.is_file():
-        print("Отправка в Telegram пропущена: файл channels.csv не создан")
-        return
-
-    average = sum(row["Вовлечённость %"] for row in rows) / len(rows) if rows else 0
-    caption = (
-        f"Каналов в базе: {len(rows)}\n"
-        f"Средняя вовлечённость: {average:.1f}%\n"
-        f"Отбор: {MIN_SUBSCRIBERS}–{MAX_SUBSCRIBERS} подписчиков, "
-        f"пост не старше {MAX_POST_AGE_DAYS} дней, просмотры ≥ {MIN_ENGAGEMENT_PCT:.0f}%"
-    )
-
-    try:
-        with open(OUTPUT_FILE, "rb") as document:
-            response = SESSION.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
-                data={"chat_id": ADMIN_CHAT_ID, "caption": caption[:1024]},
-                files={"document": (OUTPUT_FILE.name, document, "text/csv")},
-                timeout=120,
-            )
-    except requests.RequestException as error:
-        print(f"Отправка не удалась: {type(error).__name__}: {error}")
-        return
-
-    if response.status_code != 200:
-        print(f"Отправка не удалась: HTTP {response.status_code} {response.text[:200]}")
-        return
-
-    print(f"Файл отправлен в Telegram (chat_id {ADMIN_CHAT_ID}).")
+    return len(rows)
 
 
 def main() -> None:
-    rows: list[dict] = []
+    files = {"outreach": OUTREACH_FILE, "comments": COMMENTS_FILE}
+    targets = {"outreach": OUTREACH_TARGET, "comments": COMMENTS_TARGET}
+    counts = {"outreach": 0, "comments": 0}
+
+    for path in files.values():
+        path.unlink(missing_ok=True)
 
     try:
-        candidates = search_usernames() | github_usernames()
-        ordered = sorted(candidates, key=str.lower)
-        if MAX_CHECKS is not None:
-            ordered = ordered[:MAX_CHECKS]
-
-        total = len(ordered)
+        candidates = sorted(search_usernames(), key=str.lower)
+        total = len(candidates)
         if total == 0:
-            print("Кандидаты не найдены: поисковик и GitHub не отдали ссылки.")
+            print("Кандидаты не найдены: поисковик не отдал ни одной ссылки.")
             return
 
-        print(f"\nУникальных кандидатов на проверку: {total}\n")
+        print(f"\nКандидатов на проверку: {total}\n")
 
-        for index, username in enumerate(ordered, 1):
-            print(f"[проверка {index}/{total}] @{username}")
-            row = check_channel(username)
-            if row is not None:
-                rows.append(row)
-                print(f"    ✔ подходит: вовлечённость {row['Вовлечённость %']}%")
+        for index, username in enumerate(candidates[:MAX_CHECKS], 1):
+            if all(counts[kind] >= targets[kind] for kind in targets):
+                print("Набраны обе базы, останавливаюсь.")
+                break
+
+            print(f"[проверка {index}/{min(total, MAX_CHECKS)}] @{username} "
+                  f"(outreach {counts['outreach']}, comments {counts['comments']})")
+            channel = inspect_channel(username)
+            if channel is None:
+                continue
+
+            kind = classify(channel)
+            if kind is None:
+                continue
+
+            append_row(files[kind], build_row(channel))
+            counts[kind] += 1
+            print(f"    ✔ {kind}: {channel['subscribers']} подписчиков, "
+                  f"вовлечённость {channel['engagement']}%")
     except KeyboardInterrupt:
-        print("\nПрервано пользователем, сохраняю найденное.")
+        print("\nПрервано пользователем, оставляю уже найденное.")
     finally:
-        rows.sort(key=lambda row: row["Вовлечённость %"], reverse=True)
-        if rows:
-            save_csv(rows)
-            send_to_telegram(rows)
-        else:
-            print("Подходящих каналов не найдено.")
+        for kind, path in files.items():
+            saved = sort_csv(path)
+            print(f"{path.name}: каналов {saved}")
 
 
 if __name__ == "__main__":
