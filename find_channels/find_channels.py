@@ -1,16 +1,16 @@
 """Ночной сбор базы живых российских Telegram-каналов.
 
-Работает бесконечными раундами до Ctrl+C. Кандидаты берутся из поисковой
-выдачи (ddgs), качество проверяется по https://t.me/s/<username>.
-Проверенные каналы запоминаются, поэтому повторных проверок нет.
+Работает бесконечными раундами до Ctrl+C. Кандидаты берутся из выдачи ddgs
+(backend lite с фоллбэком на html) и каталогов tgstat, качество проверяется
+по публичной веб-версии https://t.me/s/<username>.
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import random
 import re
 import signal
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,48 +32,56 @@ CHECKED_FILE = BASE_DIR / "checked_usernames.txt"
 # ---------- Пул запросов ----------
 
 SEARCH_QUERIES = [
-    "site:t.me/s/ вайбкодинг",
-    "site:t.me вайбкодинг без кода",
-    "site:t.me/s/ вайб кодинг",
-    "site:t.me/s/ cursor",
-    "site:t.me cursor ide",
-    "site:t.me/s/ claude code",
-    "site:t.me/s/ claude",
-    "site:t.me/s/ chatgpt",
-    "site:t.me/s/ нейросети",
-    "site:t.me/s/ искусственный интеллект",
-    "site:t.me/s/ нейросети для бизнеса",
-    "site:t.me/s/ нейросети для маркетинга",
-    "site:t.me/s/ промпты",
-    "site:t.me/s/ промпт инженерия",
-    "site:t.me/s/ midjourney",
-    "site:t.me/s/ генерация контента нейросети",
-    "site:t.me/s/ автоматизация контента",
-    "site:t.me/s/ автоматизация бизнеса",
-    "site:t.me/s/ n8n",
-    "site:t.me/s/ no-code",
-    "site:t.me/s/ боты без кода",
-    "site:t.me/s/ telegram mini apps",
-    "site:t.me/s/ telegram боты",
-    "site:t.me/s/ создание сайтов на нейросетях",
-    "site:t.me/s/ заработок на нейросетях",
-    "site:t.me/s/ заработок на ии",
-    "site:t.me/s/ фриланс нейросети",
-    "site:t.me/s/ фриланс на ии",
-    "site:t.me/s/ инди разработчик",
-    "site:t.me/s/ соло разработчик",
-    "site:t.me/s/ инди мейкер",
-    "site:t.me/s/ микросаас",
-    "site:t.me/s/ маркетинг нейросети",
-    "site:t.me/s/ продвижение с нейросетями",
-    "site:t.me/s/ программирование",
+    "site:t.me/s вайбкодинг",
+    "site:t.me/s вайб кодинг",
+    "site:t.me/s cursor",
+    "site:t.me/s claude code",
+    "site:t.me/s claude",
+    "site:t.me/s chatgpt",
+    "site:t.me/s нейросети",
+    "site:t.me/s нейросети для бизнеса",
+    "site:t.me/s искусственный интеллект",
+    "site:t.me/s промпты",
+    "site:t.me/s midjourney",
+    "site:t.me/s генерация контента",
+    "site:t.me/s автоматизация ии",
+    "site:t.me/s автоматизация бизнеса",
+    "site:t.me/s n8n",
+    "site:t.me/s no-code",
+    "site:t.me/s боты без кода",
+    "site:t.me/s telegram боты",
+    "site:t.me/s telegram mini apps",
+    "site:t.me/s сайты на нейросетях",
+    "site:t.me/s заработок ии",
+    "site:t.me/s заработок на нейросетях",
+    "site:t.me/s фриланс ии",
+    "site:t.me/s фриланс нейросети",
+    "site:t.me/s инди разработчик",
+    "site:t.me/s соло разработчик",
+    "site:t.me/s инди мейкер",
+    "site:t.me/s микросаас",
+    "site:t.me/s маркетинг нейросети",
+    "site:t.me/s продвижение нейросети",
+    "site:t.me/s программирование",
+    "site:t.me/s python разработка",
     "site:tgstat.ru/channel нейросети",
     "site:tgstat.ru/channel вайбкодинг",
     "site:tgstat.ru/channel claude",
     "site:tgstat.ru/channel автоматизация",
-    "site:tgstat.ru/channel программирование",
+    "site:telemetr.io нейросети",
+    "site:telemetr.io вайбкодинг",
+    "site:telemetr.io claude",
+    "site:telemetr.io автоматизация",
+    "site:telemetr.io маркетинг",
 ]
-RESULTS_PER_QUERY = 50
+
+CATALOG_PAGES = [
+    "https://tgstat.ru/ratings/channels/tech",
+    "https://tgstat.ru/ratings/channels/marketing",
+]
+
+SEARCH_BACKENDS = ("lite", "html")
+RESULTS_PER_QUERY = 30
 
 # ---------- Режим работы ----------
 
@@ -127,6 +135,9 @@ CSV_COLUMNS = [
 USERNAME_PART = r"[A-Za-z][A-Za-z0-9_]{4,31}"
 TME_RE = re.compile(rf"t\.me/(?:s/)?({USERNAME_PART})")
 MENTION_RE = re.compile(rf"(?<![\w/@.])@({USERNAME_PART})\b")
+TGSTAT_RE = re.compile(rf"tgstat\.ru/(?:channel|chat)/@?({USERNAME_PART})")
+TELEMETR_RE = re.compile(rf"telemetr\.io/[\w-]+/channels/\d+-({USERNAME_PART})")
+TGSTAT_RELATIVE_RE = re.compile(rf'/channel/@?({USERNAME_PART})(?=["\'/?#]|$)')
 COUNT_RE = re.compile(r"([\d\s.,]+)\s*(k|m|тыс\.?|млн\.?)?")
 
 RESERVED = {
@@ -144,7 +155,7 @@ SESSION.headers.update({
 })
 
 
-# ---------- Паузы ----------
+# ---------- Служебное ----------
 
 def pause(bounds: tuple[float, float]) -> None:
     time.sleep(random.uniform(*bounds))
@@ -152,6 +163,34 @@ def pause(bounds: tuple[float, float]) -> None:
 
 def log(message: str) -> None:
     print(f"{datetime.now():%H:%M:%S} {message}", flush=True)
+
+
+# ---------- Сеть ----------
+
+def fetch(url: str, *, delay: float | None = None, attempts: int = MAX_RETRIES) -> str | None:
+    """GET с паузой и повторами. None, если страница недоступна."""
+    wait = REQUEST_DELAY if delay is None else delay
+    for attempt in range(1, attempts + 1):
+        try:
+            response = SESSION.get(url, timeout=TIMEOUT)
+        except requests.RequestException as error:
+            log(f"    сеть: {type(error).__name__}, повтор {attempt}/{attempts}")
+            time.sleep(wait * attempt)
+            continue
+
+        if wait > 0:
+            time.sleep(wait)
+
+        if response.status_code == 200:
+            return response.text
+
+        retryable = response.status_code == 429 or response.status_code >= 500
+        log(f"    HTTP {response.status_code}" + (", повтор" if retryable else ""))
+        if not retryable:
+            return None
+        time.sleep(wait * attempt)
+
+    return None
 
 
 # ---------- Разбор ----------
@@ -200,10 +239,26 @@ def detect_niches(text: str) -> list[str]:
 
 
 def extract_usernames(text: str) -> set[str]:
+    """Все упоминания каналов: t.me/..., tgstat.ru/..., telemetr.io/..."""
     decoded = unquote(text)
     names: set[str] = set()
 
-    for match in TME_RE.finditer(decoded):
+    for pattern in (TME_RE, TGSTAT_RE, TELEMETR_RE):
+        for match in pattern.finditer(decoded):
+            name = match.group(1)
+            if name.lower() in RESERVED or name.isdigit():
+                continue
+            names.add(name)
+
+    return names
+
+
+def extract_catalog_usernames(html: str) -> set[str]:
+    """Каналы со страницы рейтинга tgstat: абсолютные и относительные ссылки."""
+    decoded = unquote(html)
+    names = extract_usernames(decoded)
+
+    for match in TGSTAT_RELATIVE_RE.finditer(decoded):
         name = match.group(1)
         if name.lower() in RESERVED or name.isdigit():
             continue
@@ -300,50 +355,65 @@ def sort_csv(path: Path, key: str) -> int:
 
 # ---------- Поиск ----------
 
-def search_query(ddgs: DDGS, query: str) -> set[str]:
-    try:
-        try:
-            results = ddgs.text(query, region="ru-ru", max_results=RESULTS_PER_QUERY)
-        except TypeError:
-            results = ddgs.text(query, max_results=RESULTS_PER_QUERY)
-        results = list(results or [])
-    except Exception as error:
-        log(f"    поиск не удался: {type(error).__name__}: {error}")
-        raise
-
+def collect_from_results(results: list[dict]) -> set[str]:
     found: set[str] = set()
     for result in results:
         blob = " ".join(str(result.get(key, "")) for key in ("href", "title", "body"))
         found |= extract_usernames(blob)
         found |= {name for name in MENTION_RE.findall(blob)
                   if name.lower() not in RESERVED}
-
     return found
 
 
-# ---------- Проверка канала ----------
+def search_query(ddgs: DDGS, query: str) -> tuple[set[str], bool]:
+    """Поиск через текстовый движок. Возвращает (каналы, удался ли хоть один бэкенд)."""
+    ok = False
 
-def fetch_channel(username: str) -> str | None:
-    url = f"https://t.me/s/{username}"
-    for attempt in range(1, MAX_RETRIES + 1):
+    for backend in SEARCH_BACKENDS:
         try:
-            response = SESSION.get(url, timeout=TIMEOUT)
-        except requests.RequestException as error:
-            log(f"    сеть: {type(error).__name__}, повтор {attempt}/{MAX_RETRIES}")
-            time.sleep(REQUEST_DELAY * attempt)
+            results = ddgs.text(query, region="ru-ru", backend=backend,
+                                max_results=RESULTS_PER_QUERY)
+            results = list(results or [])
+        except TypeError:
+            # старые версии ddgs могут не знать про backend
+            try:
+                results = list(ddgs.text(query, region="ru-ru",
+                                         max_results=RESULTS_PER_QUERY) or [])
+            except Exception as error:
+                log(f"    {backend}: {type(error).__name__}: {error}")
+                continue
+        except Exception as error:
+            log(f"    {backend}: {type(error).__name__}: {error}")
             continue
 
-        if response.status_code == 200:
-            return response.text
+        ok = True
+        found = collect_from_results(results)
+        log(f"    {backend}: результатов {len(results)}, каналов {len(found)}")
+        if found:
+            return found, True
 
-        retryable = response.status_code == 429 or response.status_code >= 500
-        log(f"    HTTP {response.status_code}" + (", повтор" if retryable else ""))
-        if not retryable:
-            return None
-        time.sleep(REQUEST_DELAY * attempt)
+    return set(), ok
 
-    return None
 
+def catalog_usernames() -> set[str]:
+    """Каналы из публичных рейтингов tgstat."""
+    names: set[str] = set()
+
+    for url in CATALOG_PAGES:
+        log(f"каталог: {url}")
+        html = fetch(url, delay=random.uniform(*CHECK_PAUSE), attempts=2)
+        if html is None:
+            log("    каталог недоступен, идём дальше")
+            continue
+
+        found = extract_catalog_usernames(html)
+        log(f"    каналов на странице: {len(found)}")
+        names |= found
+
+    return names
+
+
+# ---------- Проверка канала ----------
 
 def parse_subscribers(info: BeautifulSoup) -> int | None:
     for counter in info.select("div.tgme_channel_info_counter"):
@@ -380,7 +450,7 @@ def parse_posts(soup: BeautifulSoup) -> list[dict]:
 
 
 def inspect_channel(username: str) -> dict | None:
-    html = fetch_channel(username)
+    html = fetch(f"https://t.me/s/{username}")
     if html is None:
         return None
 
@@ -464,66 +534,112 @@ def fits_comments(info: dict) -> bool:
 
 # ---------- Раунд ----------
 
-def run_round(ddgs: DDGS, seen: set[str], round_no: int) -> tuple[int, int]:
+def check_candidates(candidates, seen: set[str], counters: dict[str, int],
+                     round_no: int, checked: int, limit: int) -> int:
+    """Проверяет кандидатов, пока не упрёмся в лимит. Возвращает число проверок."""
+    done = 0
+
+    for username in candidates:
+        if checked + done >= limit:
+            break
+
+        pause(CHECK_PAUSE)
+        done += 1
+        seen.add(username.lower())
+        mark_checked(username)
+
+        info = inspect_channel(username)
+        if info is None:
+            continue
+
+        if fits_outreach(info):
+            append_row(OUTREACH_FILE, base_row(info))
+            counters["outreach"] += 1
+        elif fits_comments(info):
+            append_row(COMMENTS_FILE, base_row(info))
+            counters["comments"] += 1
+        else:
+            continue
+
+        log(f"[Раунд {round_no}] Найдено для рассылки: {counters['outreach']} "
+            f"| Для комментов: {counters['comments']}")
+
+    return done
+
+
+def run_round(ddgs: DDGS, seen: set[str], round_no: int,
+              limit: int = ROUND_CHECK_LIMIT) -> tuple[int, int]:
+    counters = {"outreach": 0, "comments": 0}
+    checked = 0
+
+    fresh_catalog = [name for name in catalog_usernames() if name.lower() not in seen]
+    random.shuffle(fresh_catalog)
+    checked += check_candidates(fresh_catalog, seen, counters, round_no, checked, limit)
+
     queries = SEARCH_QUERIES[:]
     random.shuffle(queries)
-
-    found_outreach = 0
-    found_comments = 0
-    checked_now = 0
     errors_in_row = 0
 
     for query in queries:
-        if checked_now >= ROUND_CHECK_LIMIT:
+        if checked >= limit:
             break
 
         log(f"[Раунд {round_no}] запрос: {query}")
         try:
-            candidates = search_query(ddgs, query)
-            errors_in_row = 0
-        except Exception:
+            candidates, ok = search_query(ddgs, query)
+        except Exception as error:
+            log(f"    поиск упал: {type(error).__name__}: {error}")
+            candidates, ok = set(), False
+
+        if not ok:
             errors_in_row += 1
             if errors_in_row >= MAX_CONSECUTIVE_ERRORS:
-                log(f"Поисковик ругается {errors_in_row} раз подряд, пауза {BLOCK_BREAK // 60} мин")
+                log(f"Поисковик молчит {errors_in_row} раз подряд, пауза {BLOCK_BREAK // 60} мин")
                 time.sleep(BLOCK_BREAK)
                 errors_in_row = 0
             continue
 
+        errors_in_row = 0
         fresh = [name for name in candidates if name.lower() not in seen]
         random.shuffle(fresh)
         log(f"    новых кандидатов: {len(fresh)}")
-
-        for username in fresh:
-            if checked_now >= ROUND_CHECK_LIMIT:
-                break
-
-            pause(CHECK_PAUSE)
-            checked_now += 1
-            seen.add(username.lower())
-            mark_checked(username)
-
-            info = inspect_channel(username)
-            if info is None:
-                continue
-
-            if fits_outreach(info):
-                append_row(OUTREACH_FILE, base_row(info))
-                found_outreach += 1
-            elif fits_comments(info):
-                append_row(COMMENTS_FILE, base_row(info))
-                found_comments += 1
-            else:
-                continue
-
-            log(f"[Раунд {round_no}] Найдено для рассылки: {found_outreach} "
-                f"| Для комментов: {found_comments}")
+        checked += check_candidates(fresh, seen, counters, round_no, checked, limit)
 
         pause(QUERY_PAUSE)
 
-    return found_outreach, found_comments
+    return counters["outreach"], counters["comments"]
 
 
-def main() -> None:
+# ---------- Режимы запуска ----------
+
+def probe() -> None:
+    """Быстрая проверка: каталог + один запрос, около 10–30 секунд."""
+    seen = load_seen()
+    log(f"Проверка запуска, в памяти уже {len(seen)} каналов")
+
+    with DDGS() as ddgs:
+        names = catalog_usernames()
+        found, ok = search_query(ddgs, "site:t.me/s нейросети")
+        log(f"поиск {'работает' if ok else 'не ответил'}, каналов {len(found)}")
+        names |= found
+
+    fresh = [name for name in names if name.lower() not in seen]
+    random.shuffle(fresh)
+    log(f"кандидатов к проверке: {len(fresh)}, проверяю первые {min(5, len(fresh))}")
+
+    counters = {"outreach": 0, "comments": 0}
+    check_candidates(fresh[:5], seen, counters, 0, 0, 5)
+
+    log(f"Проверка закончена: рассылка {counters['outreach']}, "
+        f"комменты {counters['comments']}")
+    if counters["outreach"] or counters["comments"]:
+        log("Каналы пишутся в CSV, можно запускать ночной режим")
+    else:
+        log("Ничего не подошло: скорее всего поисковик не отдал ссылки, "
+            "запустите ещё раз или подождите")
+
+
+def night_mode() -> None:
     seen = load_seen()
     log(f"Уже проверено ранее: {len(seen)} каналов")
 
@@ -560,6 +676,18 @@ def main() -> None:
         log(f"Итог: channels_outreach.csv — {outreach_saved}, "
             f"channels_comments.csv — {comments_saved}, "
             f"проверено {len(seen)}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Сбор базы Telegram-каналов")
+    parser.add_argument("--probe", action="store_true",
+                        help="быстрая проверка поиска и парсинга, без ночного цикла")
+    args = parser.parse_args()
+
+    if args.probe:
+        probe()
+    else:
+        night_mode()
 
 
 if __name__ == "__main__":
