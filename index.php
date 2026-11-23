@@ -77,7 +77,7 @@ $contacts = [
     ['Instagram', '@mebels.krd', 'https://www.instagram.com/mebels.krd', 'ig'],
     ['MAX', 'мессенджер', $maxLink, 'max'],
     ['Pinterest', 'наши проекты', 'https://www.pinterest.com/', 'pin'],
-    ['Адрес', 'г. Краснодар, ул. Конечная 2, 2 этаж', 'https://yandex.ru/maps/?text=' . rawurlencode('Краснодар, улица Конечная, 2'), 'map'],
+    ['Адрес', $address, $mapYandex, 'map'],
 ];
 
 $icon = static function (string $key): string {
