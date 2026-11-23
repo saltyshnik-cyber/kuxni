@@ -32,15 +32,15 @@ $slotPhoto = static function (string $slot, int $fallbackIndex) use ($slotPhotos
 
 $heroPhoto = $slotPhoto('hero', 0);
 
-$address     = 'г. Краснодар, ул. Конечная, 2 (ориентир — рядом с самолётом, мкр. Энка)';
-$addressShort = 'г. Краснодар, ул. Конечная, 2 (рядом с самолётом, мкр. Энка)';
+$address      = 'г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2';
+$addressShort = $address;
 // Яндекс.Карты принимают координаты в порядке «долгота,широта».
-$mapLon      = '38.983550';
-$mapLat      = '45.080450';
-$mapEmbed    = 'https://yandex.ru/map-widget/v1/?text=' . rawurlencode('Краснодар, улица Конечная, 2') . '&z=16';
-$mapYandex   = 'https://yandex.ru/maps/?ll=' . $mapLon . '%2C' . $mapLat
-    . '&z=16&pt=' . $mapLon . ',' . $mapLat . ',pm2rdm';
-$map2gis     = 'https://2gis.ru/krasnodar?m=' . $mapLon . '%2C' . $mapLat . '%2F16';
+$mapLon      = '38.974837';
+$mapLat      = '45.095560';
+$mapPoint    = $mapLon . '%2C' . $mapLat;
+$mapEmbed    = 'https://yandex.ru/map-widget/v1/?ll=' . $mapPoint . '&z=16&pt=' . $mapPoint . '%2Cpm2rdm';
+$mapYandex   = 'https://yandex.ru/maps/-/CXcJfOn1';
+$map2gis     = 'https://2gis.ru/krasnodar?m=' . $mapPoint . '%2F16';
 
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
