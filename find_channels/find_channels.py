@@ -1,15 +1,16 @@
-"""Сбор двух баз русскоязычных Telegram-каналов для партнёрства.
+"""Ночной сбор базы живых российских Telegram-каналов.
 
-channels_outreach.csv — 150..15 000 подписчиков, обязательный контакт админа.
-channels_comments.csv — 3 000..200 000 подписчиков, крупные AI/tech-каналы.
-
-Telegram API не нужен: кандидаты берутся из выдачи ddgs, качество
-проверяется по публичной веб-версии https://t.me/s/<username>.
+Работает бесконечными раундами до Ctrl+C. Кандидаты берутся из поисковой
+выдачи (ddgs), качество проверяется по https://t.me/s/<username>.
+Проверенные каналы запоминаются, поэтому повторных проверок нет.
 """
 from __future__ import annotations
 
 import csv
+import random
 import re
+import signal
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,105 +21,114 @@ from bs4 import BeautifulSoup
 
 try:
     from ddgs import DDGS
-except ImportError:  # старый пакет, если ddgs ещё не установлен
+except ImportError:  # запасной вариант, если ddgs ещё не установлен
     from duckduckgo_search import DDGS
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTREACH_FILE = BASE_DIR / "channels_outreach.csv"
 COMMENTS_FILE = BASE_DIR / "channels_comments.csv"
+CHECKED_FILE = BASE_DIR / "checked_usernames.txt"
 
-# ---------- Что искать ----------
+# ---------- Пул запросов ----------
 
 SEARCH_QUERIES = [
-    "site:t.me/s/ нейросети",
-    "site:t.me нейросети",
-    "site:t.me/s/ искусственный интеллект",
-    "site:t.me искусственный интеллект",
     "site:t.me/s/ вайбкодинг",
-    "site:t.me вайбкодинг",
-    "site:t.me/s/ claude",
-    "site:t.me claude код",
+    "site:t.me вайбкодинг без кода",
+    "site:t.me/s/ вайб кодинг",
     "site:t.me/s/ cursor",
-    "site:t.me chatgpt",
-    "site:t.me midjourney",
-    "site:t.me промпты",
-    "site:t.me нейросети для бизнеса",
-    "site:t.me автоматизация бизнеса",
-    "site:t.me боты без кода",
-    "site:t.me создание сайтов на нейросетях",
-    "site:t.me фриланс нейросети",
-    "site:t.me заработок на нейросетях",
-    "site:t.me инди разработчик",
-    "site:t.me соло разработчик",
-    "site:t.me инди мейкер",
-    "site:t.me n8n",
-    "site:t.me no-code",
-    "site:t.me маркетинг нейросети",
+    "site:t.me cursor ide",
+    "site:t.me/s/ claude code",
+    "site:t.me/s/ claude",
+    "site:t.me/s/ chatgpt",
+    "site:t.me/s/ нейросети",
+    "site:t.me/s/ искусственный интеллект",
+    "site:t.me/s/ нейросети для бизнеса",
+    "site:t.me/s/ нейросети для маркетинга",
+    "site:t.me/s/ промпты",
+    "site:t.me/s/ промпт инженерия",
+    "site:t.me/s/ midjourney",
+    "site:t.me/s/ генерация контента нейросети",
+    "site:t.me/s/ автоматизация контента",
+    "site:t.me/s/ автоматизация бизнеса",
+    "site:t.me/s/ n8n",
+    "site:t.me/s/ no-code",
+    "site:t.me/s/ боты без кода",
+    "site:t.me/s/ telegram mini apps",
+    "site:t.me/s/ telegram боты",
+    "site:t.me/s/ создание сайтов на нейросетях",
+    "site:t.me/s/ заработок на нейросетях",
+    "site:t.me/s/ заработок на ии",
+    "site:t.me/s/ фриланс нейросети",
+    "site:t.me/s/ фриланс на ии",
+    "site:t.me/s/ инди разработчик",
+    "site:t.me/s/ соло разработчик",
+    "site:t.me/s/ инди мейкер",
+    "site:t.me/s/ микросаас",
+    "site:t.me/s/ маркетинг нейросети",
+    "site:t.me/s/ продвижение с нейросетями",
     "site:t.me/s/ программирование",
-    "site:t.me/s/ фриланс",
-    "site:t.me/s/ маркетинг",
-    "site:t.me/s/ стартапы",
     "site:tgstat.ru/channel нейросети",
     "site:tgstat.ru/channel вайбкодинг",
+    "site:tgstat.ru/channel claude",
+    "site:tgstat.ru/channel автоматизация",
     "site:tgstat.ru/channel программирование",
 ]
 RESULTS_PER_QUERY = 50
 
-# ---------- Пороги отбора ----------
+# ---------- Режим работы ----------
 
-OUTREACH_MIN_SUBSCRIBERS = 150
-OUTREACH_MAX_SUBSCRIBERS = 15_000
-COMMENTS_MIN_SUBSCRIBERS = 3_000
-COMMENTS_MAX_SUBSCRIBERS = 200_000
+ROUND_CHECK_LIMIT = 350          # кандидатов на раунд ≈ 15–20 минут
+CHECK_PAUSE = (2.0, 3.0)         # пауза перед каждым t.me/s/<username>
+QUERY_PAUSE = (3.0, 6.0)         # пауза между поисковыми запросами
+ROUND_BREAK = (300, 600)         # перерыв между раундами, 5–10 минут
+BLOCK_BREAK = 600                # пауза после серии ошибок поиска
+MAX_CONSECUTIVE_ERRORS = 5
+
+# ---------- Пороги ----------
+
+SUB_RANGE_OUTREACH = (150, 15_000)
+SUB_RANGE_COMMENTS = (3_000, 250_000)
 MAX_POST_AGE_DAYS = 10
+POSTS_FOR_ENGAGEMENT = 5
 MIN_CYRILLIC_SHARE = 0.3
-REQUEST_DELAY = 1.8          # секунд после каждого запроса к t.me
+REQUEST_DELAY = 1.5
 TIMEOUT = 25
 MAX_RETRIES = 3
-POSTS_FOR_VIEWS = 5          # по скольким последним постам считаем просмотры
 
-OUTREACH_TARGET = 60         # сколько каналов набрать в базу рассылки
-COMMENTS_TARGET = 40         # сколько каналов набрать в базу для комментариев
-MAX_CHECKS = 400             # страховка от бесконечного прогона
+# ---------- Ниши ----------
+
+NICHE_MARKERS: dict[str, tuple[str, ...]] = {
+    "вайбкодинг": ("вайбкод", "vibe cod", "vibecod", "без кода", "no-code", "no code",
+                   "low-code", "низкий код", "cursor", "claude code", "сайты на нейро"),
+    "нейросети": ("нейросет", "нейронк", "искусственный интеллект", "gpt", "chatgpt",
+                  "claude", "midjourney", "промпт", "prompt", "llm", "ai-агент", "ии-агент"),
+    "заработок": ("заработ", "фриланс", "доход", "инди", "indie", "соло-разработ",
+                  "соло разработ", "мейкер", "saas"),
+    "разработка": ("разработ", "программ", "кодинг", "код ", "python", "javascript",
+                   "mini app", "телеграм бот", "telegram bot", "боты без кода"),
+    "маркетинг": ("маркетинг", "продвиж", "воронк", "таргет", "автоматизац",
+                  "контент", "трафик"),
+    "технологии": ("технолог", "it-", "стартап", "продукт", "цифров", "инновац"),
+}
+
+TECH_NICHES = {"вайбкодинг", "нейросети", "разработка", "технологии"}
+
+KZ_MARKERS = (".kz", "казахстан", "алматы", "астана", "тенге", "🇰🇿")
+VACANCY_MARKERS = ("ваканс", "ищу работу", "поиск работы", "резюме", "hh.ru",
+                   "подборка вакансий", "карьер", "стажировк", "зарплат")
+DRY_NEWS_MARKERS = ("новости", "news", "дайджест", "digest", "лента новостей",
+                    "пресс-релиз", "обзор новостей")
 
 CSV_COLUMNS = [
-    "Название канала",
-    "Ссылка на канал",
-    "Подписчики",
-    "Средние просмотры",
-    "Вовлечённость %",
-    "Контакт админа",
-    "Описание канала",
+    "Название канала", "Ссылка на канал", "Подписчики", "Средние просмотры",
+    "Вовлечённость %", "Контакт админа", "Ниша", "Описание канала",
 ]
-
-# ---------- Регулярки ----------
 
 USERNAME_PART = r"[A-Za-z][A-Za-z0-9_]{4,31}"
 TME_RE = re.compile(rf"t\.me/(?:s/)?({USERNAME_PART})")
-TGSTAT_RE = re.compile(rf"tgstat\.ru/(?:channel|chat)/@?({USERNAME_PART})")
-CONTACT_RE = re.compile(r"(?<![\w/@.])@([A-Za-z][A-Za-z0-9_]{3,31})\b")
+MENTION_RE = re.compile(rf"(?<![\w/@.])@({USERNAME_PART})\b")
 COUNT_RE = re.compile(r"([\d\s.,]+)\s*(k|m|тыс\.?|млн\.?)?")
 
-KZ_RE = re.compile(r"\.kz\b|казахстан|астан[аеы]|алмат[ыае]|казах|караганда|шымкент", re.I)
-VACANCY_RE = re.compile(r"ваканси|резюме|hh\.ru|ищем\s+сотрудник|работа\s+в\s+|подработк", re.I)
-NEWS_RE = re.compile(r"новост|news|дайджест", re.I)
-
-OUTREACH_RE = re.compile(
-    r"вайб[- ]?код|vibe[- ]?cod|нейро|нейронк|\bии\b|\bai\b|chatgpt|\bgpt\b|claude|midjourney"
-    r"|промпт|prompt|no[- ]?code|low[- ]?code|n8n|zapier|cursor|tilda|\bбот[а-яё]*|сайт[а-яё]*"
-    r"|лендинг|автоматизац|фриланс|заработ[а-яё]*|доход|инди|соло[- ]?разработ|мейкер|стартап"
-    r"|маркетинг|\bsmm\b|продвижен|воронк|python|разработ[а-яё]*|программирован",
-    re.I,
-)
-
-COMMENTS_RE = re.compile(
-    r"нейро|нейронк|\bии\b|\bai\b|искусственн\w*\s+интеллект|chatgpt|\bgpt\b|claude|midjourney"
-    r"|вайб[- ]?код|vibe[- ]?cod|\bcursor\b|\bllm\b|промпт|prompt|no[- ]?code|автоматизац"
-    r"|технолог|разработ|программирован|digital|\bит\b",
-    re.I,
-)
-
-# Служебные пути Telegram, которые не являются каналами.
 RESERVED = {
     "s", "joinchat", "addstickers", "share", "proxy", "socks", "iv",
     "setlanguage", "login", "durov", "telegram", "telegramtips", "contact",
@@ -134,39 +144,17 @@ SESSION.headers.update({
 })
 
 
-# ---------- Сеть ----------
+# ---------- Паузы ----------
 
-def fetch(url: str, *, delay: float = REQUEST_DELAY, attempts: int = MAX_RETRIES) -> str | None:
-    """GET с паузой и повторами. None, если страница недоступна."""
-    for attempt in range(1, attempts + 1):
-        try:
-            response = SESSION.get(url, timeout=TIMEOUT)
-        except requests.RequestException as error:
-            print(f"    сеть: {type(error).__name__}, повтор {attempt}/{attempts}")
-            time.sleep(delay * attempt)
-            continue
-
-        if delay > 0:
-            time.sleep(delay)
-
-        if response.status_code == 200:
-            return response.text
-
-        retryable = response.status_code == 429 or response.status_code >= 500
-        print(f"    HTTP {response.status_code}" + (", повтор" if retryable else ""))
-        if not retryable:
-            return None
-        time.sleep(delay * attempt)
-
-    return None
+def pause(bounds: tuple[float, float]) -> None:
+    time.sleep(random.uniform(*bounds))
 
 
-def get_soup(url: str) -> BeautifulSoup | None:
-    html = fetch(url)
-    return BeautifulSoup(html, "html.parser") if html else None
+def log(message: str) -> None:
+    print(f"{datetime.now():%H:%M:%S} {message}", flush=True)
 
 
-# ---------- Разбор текста и чисел ----------
+# ---------- Разбор ----------
 
 def parse_count(text: str) -> int:
     """«1 234», «12.3K», «1,2 тыс.» → целое число."""
@@ -200,30 +188,45 @@ def is_russian(text: str) -> bool:
     return len(cyrillic) / len(letters) >= MIN_CYRILLIC_SHARE
 
 
+def has_marker(text: str, markers: tuple[str, ...]) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in markers)
+
+
+def detect_niches(text: str) -> list[str]:
+    lowered = text.lower()
+    return [niche for niche, markers in NICHE_MARKERS.items()
+            if any(marker in lowered for marker in markers)]
+
+
 def extract_usernames(text: str) -> set[str]:
-    """Все упоминания каналов в тексте: t.me/..., tgstat.ru/channel/..."""
     decoded = unquote(text)
     names: set[str] = set()
 
-    for pattern in (TME_RE, TGSTAT_RE):
-        for match in pattern.finditer(decoded):
-            name = match.group(1)
-            if name.lower() in RESERVED or name.isdigit():
-                continue
-            names.add(name)
+    for match in TME_RE.finditer(decoded):
+        name = match.group(1)
+        if name.lower() in RESERVED or name.isdigit():
+            continue
+        names.add(name)
 
     return names
 
 
 def extract_contacts(description: str, own_username: str) -> list[str]:
-    """@username из описания канала, кроме самого канала."""
+    """@username админов и менеджеров из описания, кроме самого канала."""
     own = own_username.lower()
     contacts: list[str] = []
     seen: set[str] = set()
 
-    for match in CONTACT_RE.finditer(description):
+    for match in MENTION_RE.finditer(description):
         name = match.group(1)
         if name.lower() == own or name.lower() in seen or name.lower() in RESERVED:
+            continue
+        seen.add(name.lower())
+        contacts.append(f"@{name}")
+
+    for name in sorted(extract_usernames(description)):
+        if name.lower() == own or name.lower() in seen:
             continue
         seen.add(name.lower())
         contacts.append(f"@{name}")
@@ -231,44 +234,116 @@ def extract_contacts(description: str, own_username: str) -> list[str]:
     return contacts
 
 
-# ---------- Источник кандидатов ----------
+# ---------- Память ----------
 
-def search_usernames() -> set[str]:
-    names: set[str] = set()
-    print(f"\n[поиск] запросов: {len(SEARCH_QUERIES)}")
+def username_from_link(link: str) -> str:
+    match = TME_RE.search(link)
+    return match.group(1).lower() if match else ""
 
-    with DDGS() as ddgs:
-        for index, query in enumerate(SEARCH_QUERIES, 1):
-            print(f"[{index}/{len(SEARCH_QUERIES)}] {query}")
-            try:
-                try:
-                    results = ddgs.text(query, region="ru-ru", max_results=RESULTS_PER_QUERY)
-                except TypeError:
-                    results = ddgs.text(query, max_results=RESULTS_PER_QUERY)
-                results = list(results or [])
-            except Exception as error:
-                print(f"    поиск не удался: {type(error).__name__}: {error}")
-                time.sleep(REQUEST_DELAY)
-                continue
 
-            found: set[str] = set()
-            for result in results:
-                blob = " ".join(str(result.get(key, "")) for key in ("href", "title", "body"))
-                found |= extract_usernames(blob)
-                body = str(result.get("body", ""))
-                found |= {
-                    name for name in CONTACT_RE.findall(body)
-                    if name.lower() not in RESERVED
-                }
+def load_seen() -> set[str]:
+    """Все уже проверенные каналы: из checked_usernames.txt и обоих CSV."""
+    seen: set[str] = set()
 
-            names |= found
-            print(f"    результатов {len(results)}, новых каналов {len(found)}")
-            time.sleep(REQUEST_DELAY)
+    if CHECKED_FILE.is_file():
+        for line in CHECKED_FILE.read_text(encoding="utf-8").splitlines():
+            name = line.strip().lstrip("@")
+            if name:
+                seen.add(name.lower())
 
-    return names
+    for path in (OUTREACH_FILE, COMMENTS_FILE):
+        if not path.is_file():
+            continue
+        with open(path, encoding="utf-8-sig", newline="") as file:
+            for row in csv.DictReader(file):
+                name = username_from_link(row.get("Ссылка на канал", ""))
+                if name:
+                    seen.add(name)
+
+    return seen
+
+
+def mark_checked(username: str) -> None:
+    with open(CHECKED_FILE, "a", encoding="utf-8") as file:
+        file.write(username.lower() + "\n")
+
+
+def ensure_csv(path: Path) -> None:
+    if path.is_file() and path.stat().st_size > 0:
+        return
+    with open(path, "w", encoding="utf-8-sig", newline="") as file:
+        csv.DictWriter(file, fieldnames=CSV_COLUMNS).writeheader()
+
+
+def append_row(path: Path, row: dict) -> None:
+    """Дозапись одной строки. BOM сюда не попадает — он уже в заголовке."""
+    ensure_csv(path)
+    with open(path, "a", encoding="utf-8", newline="") as file:
+        csv.DictWriter(file, fieldnames=CSV_COLUMNS).writerow(row)
+
+
+def sort_csv(path: Path, key: str) -> int:
+    if not path.is_file():
+        return 0
+    with open(path, encoding="utf-8-sig", newline="") as file:
+        rows = list(csv.DictReader(file))
+    if not rows:
+        return 0
+
+    rows.sort(key=lambda row: float(row[key]), reverse=True)
+    with open(path, "w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
+
+
+# ---------- Поиск ----------
+
+def search_query(ddgs: DDGS, query: str) -> set[str]:
+    try:
+        try:
+            results = ddgs.text(query, region="ru-ru", max_results=RESULTS_PER_QUERY)
+        except TypeError:
+            results = ddgs.text(query, max_results=RESULTS_PER_QUERY)
+        results = list(results or [])
+    except Exception as error:
+        log(f"    поиск не удался: {type(error).__name__}: {error}")
+        raise
+
+    found: set[str] = set()
+    for result in results:
+        blob = " ".join(str(result.get(key, "")) for key in ("href", "title", "body"))
+        found |= extract_usernames(blob)
+        found |= {name for name in MENTION_RE.findall(blob)
+                  if name.lower() not in RESERVED}
+
+    return found
 
 
 # ---------- Проверка канала ----------
+
+def fetch_channel(username: str) -> str | None:
+    url = f"https://t.me/s/{username}"
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = SESSION.get(url, timeout=TIMEOUT)
+        except requests.RequestException as error:
+            log(f"    сеть: {type(error).__name__}, повтор {attempt}/{MAX_RETRIES}")
+            time.sleep(REQUEST_DELAY * attempt)
+            continue
+
+        if response.status_code == 200:
+            return response.text
+
+        retryable = response.status_code == 429 or response.status_code >= 500
+        log(f"    HTTP {response.status_code}" + (", повтор" if retryable else ""))
+        if not retryable:
+            return None
+        time.sleep(REQUEST_DELAY * attempt)
+
+    return None
+
 
 def parse_subscribers(info: BeautifulSoup) -> int | None:
     for counter in info.select("div.tgme_channel_info_counter"):
@@ -289,7 +364,6 @@ def parse_posts(soup: BeautifulSoup) -> list[dict]:
         time_el = message.select_one("time[datetime]")
         if time_el is None or not time_el.get("datetime"):
             continue
-
         try:
             date = datetime.fromisoformat(time_el["datetime"])
         except ValueError:
@@ -306,15 +380,15 @@ def parse_posts(soup: BeautifulSoup) -> list[dict]:
 
 
 def inspect_channel(username: str) -> dict | None:
-    """Забирает из веб-превью всё, что нужно для отбора. None — если это не канал."""
-    soup = get_soup(f"https://t.me/s/{username}")
-    if soup is None:
+    html = fetch_channel(username)
+    if html is None:
         return None
 
-    # Блок tgme_channel_info есть только у публичных каналов, у групп его нет.
+    soup = BeautifulSoup(html, "html.parser")
+
+    # tgme_channel_info есть только у публичных каналов, у групп его нет.
     info = soup.select_one("div.tgme_channel_info")
     if info is None:
-        print("    пропуск: не публичный канал")
         return None
 
     title_el = info.select_one(".tgme_channel_info_header_title")
@@ -322,7 +396,6 @@ def inspect_channel(username: str) -> dict | None:
 
     subscribers = parse_subscribers(info)
     if subscribers is None:
-        print("    пропуск: подписчики скрыты")
         return None
 
     description_el = info.select_one(".tgme_channel_info_description")
@@ -331,143 +404,162 @@ def inspect_channel(username: str) -> dict | None:
 
     posts = parse_posts(soup)
     if not posts:
-        print("    пропуск: нет постов в веб-версии")
         return None
 
-    views = [post["views"] for post in posts if post["views"] > 0][-POSTS_FOR_VIEWS:]
+    last_post = posts[-1]["date"]
+    if last_post < datetime.now(timezone.utc) - timedelta(days=MAX_POST_AGE_DAYS):
+        return None
+
+    views = [post["views"] for post in posts if post["views"] > 0][-POSTS_FOR_ENGAGEMENT:]
     average_views = sum(views) / len(views) if views else 0
 
     return {
         "username": username,
         "title": title,
+        "description": description,
         "subscribers": subscribers,
         "average_views": int(round(average_views)),
         "engagement": round(average_views / subscribers * 100, 1) if subscribers else 0.0,
+        "niches": detect_niches(f"{title} {description}"),
         "contacts": extract_contacts(description, username),
-        "description": description,
-        "last_post": posts[-1]["date"],
-        "text": f"{title} {description}",
+        "russian": is_russian(f"{title} {description}") and not has_marker(
+            f"{title} {description}", KZ_MARKERS),
     }
 
 
-def classify(channel: dict) -> str | None:
-    """Куда положить канал: outreach, comments или никуда."""
-    text = channel["text"]
-
-    if not is_russian(text):
-        print("    пропуск: не русскоязычный")
-        return None
-    if KZ_RE.search(text):
-        print("    пропуск: не российский канал")
-        return None
-
-    cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_POST_AGE_DAYS)
-    if channel["last_post"] < cutoff:
-        print(f"    пропуск: последний пост {channel['last_post']:%d.%m.%Y}")
-        return None
-
-    subscribers = channel["subscribers"]
-    if (OUTREACH_MIN_SUBSCRIBERS <= subscribers <= OUTREACH_MAX_SUBSCRIBERS
-            and channel["contacts"]
-            and OUTREACH_RE.search(text)
-            and not VACANCY_RE.search(text)
-            and not NEWS_RE.search(channel["title"])):
-        return "outreach"
-
-    if (COMMENTS_MIN_SUBSCRIBERS <= subscribers <= COMMENTS_MAX_SUBSCRIBERS
-            and COMMENTS_RE.search(text)):
-        return "comments"
-
-    print("    пропуск: не подходит ни в одну базу")
-    return None
-
-
-# ---------- Сохранение ----------
-
-def ensure_csv(path: Path) -> None:
-    if path.is_file() and path.stat().st_size > 0:
-        return
-    with open(path, "w", encoding="utf-8-sig", newline="") as file:
-        csv.DictWriter(file, fieldnames=CSV_COLUMNS).writeheader()
-
-
-def append_row(path: Path, row: dict) -> None:
-    ensure_csv(path)
-    with open(path, "a", encoding="utf-8", newline="") as file:
-        csv.DictWriter(file, fieldnames=CSV_COLUMNS).writerow(row)
-
-
-def build_row(channel: dict) -> dict:
+def base_row(info: dict) -> dict:
     return {
-        "Название канала": channel["title"],
-        "Ссылка на канал": f"https://t.me/{channel['username']}",
-        "Подписчики": channel["subscribers"],
-        "Средние просмотры": channel["average_views"],
-        "Вовлечённость %": channel["engagement"],
-        "Контакт админа": ", ".join(channel["contacts"]),
-        "Описание канала": channel["description"],
+        "Название канала": info["title"],
+        "Ссылка на канал": f"https://t.me/{info['username']}",
+        "Подписчики": info["subscribers"],
+        "Средние просмотры": info["average_views"],
+        "Вовлечённость %": info["engagement"],
+        "Контакт админа": ", ".join(info["contacts"]),
+        "Ниша": ", ".join(info["niches"]),
+        "Описание канала": info["description"],
     }
 
 
-def sort_csv(path: Path) -> int:
-    """Пересортировывает готовый файл по убыванию вовлечённости. Возвращает число строк."""
-    if not path.is_file():
-        return 0
-    with open(path, encoding="utf-8-sig", newline="") as file:
-        rows = list(csv.DictReader(file))
-    if not rows:
-        return 0
+def fits_outreach(info: dict) -> bool:
+    text = f"{info['title']} {info['description']}"
+    low, high = SUB_RANGE_OUTREACH
+    return (
+        info["russian"]
+        and info["contacts"]
+        and info["niches"]
+        and low <= info["subscribers"] <= high
+        and not has_marker(text, VACANCY_MARKERS)
+        and not has_marker(info["title"], DRY_NEWS_MARKERS)
+    )
 
-    rows.sort(key=lambda row: float(row["Вовлечённость %"]), reverse=True)
-    with open(path, "w", encoding="utf-8-sig", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=CSV_COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
-    return len(rows)
+
+def fits_comments(info: dict) -> bool:
+    low, high = SUB_RANGE_COMMENTS
+    return (
+        info["russian"]
+        and bool(TECH_NICHES & set(info["niches"]))
+        and low <= info["subscribers"] <= high
+    )
+
+
+# ---------- Раунд ----------
+
+def run_round(ddgs: DDGS, seen: set[str], round_no: int) -> tuple[int, int]:
+    queries = SEARCH_QUERIES[:]
+    random.shuffle(queries)
+
+    found_outreach = 0
+    found_comments = 0
+    checked_now = 0
+    errors_in_row = 0
+
+    for query in queries:
+        if checked_now >= ROUND_CHECK_LIMIT:
+            break
+
+        log(f"[Раунд {round_no}] запрос: {query}")
+        try:
+            candidates = search_query(ddgs, query)
+            errors_in_row = 0
+        except Exception:
+            errors_in_row += 1
+            if errors_in_row >= MAX_CONSECUTIVE_ERRORS:
+                log(f"Поисковик ругается {errors_in_row} раз подряд, пауза {BLOCK_BREAK // 60} мин")
+                time.sleep(BLOCK_BREAK)
+                errors_in_row = 0
+            continue
+
+        fresh = [name for name in candidates if name.lower() not in seen]
+        random.shuffle(fresh)
+        log(f"    новых кандидатов: {len(fresh)}")
+
+        for username in fresh:
+            if checked_now >= ROUND_CHECK_LIMIT:
+                break
+
+            pause(CHECK_PAUSE)
+            checked_now += 1
+            seen.add(username.lower())
+            mark_checked(username)
+
+            info = inspect_channel(username)
+            if info is None:
+                continue
+
+            if fits_outreach(info):
+                append_row(OUTREACH_FILE, base_row(info))
+                found_outreach += 1
+            elif fits_comments(info):
+                append_row(COMMENTS_FILE, base_row(info))
+                found_comments += 1
+            else:
+                continue
+
+            log(f"[Раунд {round_no}] Найдено для рассылки: {found_outreach} "
+                f"| Для комментов: {found_comments}")
+
+        pause(QUERY_PAUSE)
+
+    return found_outreach, found_comments
 
 
 def main() -> None:
-    files = {"outreach": OUTREACH_FILE, "comments": COMMENTS_FILE}
-    targets = {"outreach": OUTREACH_TARGET, "comments": COMMENTS_TARGET}
-    counts = {"outreach": 0, "comments": 0}
+    seen = load_seen()
+    log(f"Уже проверено ранее: {len(seen)} каналов")
 
-    for path in files.values():
-        path.unlink(missing_ok=True)
+    round_no = 1
+    total = {"outreach": 0, "comments": 0}
+
+    def stop(signum, frame):  # noqa: ARG001 - обработчик сигнала
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop)
 
     try:
-        candidates = sorted(search_usernames(), key=str.lower)
-        total = len(candidates)
-        if total == 0:
-            print("Кандидаты не найдены: поисковик не отдал ни одной ссылки.")
-            return
+        with DDGS() as ddgs:
+            while True:
+                log(f"=== Раунд {round_no} стартует, проверено всего: {len(seen)} ===")
+                outreach, comments = run_round(ddgs, seen, round_no)
+                total["outreach"] += outreach
+                total["comments"] += comments
 
-        print(f"\nКандидатов на проверку: {total}\n")
+                log(f"[Раунд {round_no}] Найдено для рассылки: {outreach} "
+                    f"| Для комментов: {comments}")
+                log(f"Всего за ночь: рассылка {total['outreach']}, "
+                    f"комменты {total['comments']}, проверено {len(seen)}")
 
-        for index, username in enumerate(candidates[:MAX_CHECKS], 1):
-            if all(counts[kind] >= targets[kind] for kind in targets):
-                print("Набраны обе базы, останавливаюсь.")
-                break
-
-            print(f"[проверка {index}/{min(total, MAX_CHECKS)}] @{username} "
-                  f"(outreach {counts['outreach']}, comments {counts['comments']})")
-            channel = inspect_channel(username)
-            if channel is None:
-                continue
-
-            kind = classify(channel)
-            if kind is None:
-                continue
-
-            append_row(files[kind], build_row(channel))
-            counts[kind] += 1
-            print(f"    ✔ {kind}: {channel['subscribers']} подписчиков, "
-                  f"вовлечённость {channel['engagement']}%")
+                round_no += 1
+                wait = random.uniform(*ROUND_BREAK)
+                log(f"Перерыв {wait / 60:.1f} мин до следующего раунда")
+                time.sleep(wait)
     except KeyboardInterrupt:
-        print("\nПрервано пользователем, оставляю уже найденное.")
+        log("Остановлено пользователем, сохраняю файлы")
     finally:
-        for kind, path in files.items():
-            saved = sort_csv(path)
-            print(f"{path.name}: каналов {saved}")
+        outreach_saved = sort_csv(OUTREACH_FILE, "Вовлечённость %")
+        comments_saved = sort_csv(COMMENTS_FILE, "Подписчики")
+        log(f"Итог: channels_outreach.csv — {outreach_saved}, "
+            f"channels_comments.csv — {comments_saved}, "
+            f"проверено {len(seen)}")
 
 
 if __name__ == "__main__":
