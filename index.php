@@ -16,23 +16,6 @@ $fallbackPhoto = 'data:image/svg+xml;charset=utf-8,' . rawurlencode(
 
 $photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $realPhotos[$i % count($realPhotos)];
 
-$photos = page_photos(content());
-
-$slotPhoto = static function (string $slot, int $fallbackIndex) use ($photos, $photo): string {
-    $path = $photos[$slot] ?? '';
-    if ($path === '') {
-        return $photo($fallbackIndex);
-    }
-    return $path . '?v=' . (int)@filemtime(__DIR__ . '/' . $path);
-};
-
-$mapLon     = '38.974837';
-$mapLat     = '45.095560';
-$address    = 'г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2, 2 этаж';
-$mapWidget  = 'https://yandex.ru/map-widget/v1/?ll=' . rawurlencode("$mapLon,$mapLat") . '&z=16&pt=' . rawurlencode("$mapLon,$mapLat,pm2rdm");
-$mapYandex  = 'https://yandex.ru/maps/-/CXcJfOn1';
-$map2gis    = 'https://2gis.ru/krasnodar?m=' . rawurlencode("$mapLon,$mapLat") . '%2F16';
-
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
     'Большой проект, ЖК «Большой»',
@@ -45,7 +28,7 @@ $slides = [
     'Прихожая с зеркалом и комодом',
 ];
 
-$slides = array_slice($slides, 0, 5);
+$slides = array_slice($slides, 0, -3);
 
 $kinds = [
     ['01', 'Кухни', 'Проект с менеджером, подбор фурнитуры, подсветка рабочей зоны.', 'от 100 тыс. ₽'],
@@ -77,7 +60,7 @@ $contacts = [
     ['Instagram', '@mebels.krd', 'https://www.instagram.com/mebels.krd', 'ig'],
     ['MAX', 'мессенджер', $maxLink, 'max'],
     ['Pinterest', 'наши проекты', 'https://www.pinterest.com/', 'pin'],
-    ['Адрес', $address, $mapYandex, 'map'],
+    ['Адрес', 'г. Краснодар, ул. Конечная 2, 2 этаж', 'https://yandex.ru/maps/?text=' . rawurlencode('Краснодар, улица Конечная, 2'), 'map'],
 ];
 
 $icon = static function (string $key): string {
@@ -170,9 +153,7 @@ window.closeLead = function () {
 .form{display:grid;gap:14px;margin-top:30px;max-width:520px}.fld{display:grid;gap:7px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}.form input,.form select,.form textarea{width:100%;min-height:56px;padding:14px 18px;border-radius:16px;border:1.5px solid var(--line);background:#fff;font-family:var(--sans);font-size:16px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink)}.form textarea{min-height:100px;resize:vertical}.form input:focus,.form select:focus,.form textarea:focus{outline:2px solid var(--oak);outline-offset:2px;border-color:var(--oak)}.form .hp{position:absolute;left:-9999px;width:1px;min-height:0;height:1px;opacity:0;pointer-events:none}.form-note{font-size:14px;min-height:20px;color:var(--muted)}.form-note.err{color:#B0432B}.form-note.ok{color:#2E7D4F}.clist{list-style:none;margin-top:26px;border-top:1px solid var(--line)}.clist li{border-bottom:1px solid var(--line)}.clist a{display:flex;align-items:center;gap:16px;padding:15px 0}.clist .ic{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--forest);color:var(--oak-hi)}.clist small{display:block;font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--oak-dark)}.clist b{display:block;font-size:16.5px;overflow-wrap:anywhere}.mapbtns{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}.mapbtns a{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;font-weight:700;font-size:14.5px;background:var(--forest);color:#fff}.mapbtns a+a{background:transparent;color:var(--ink);border:1.5px solid rgba(16,18,16,.3)}.footer{padding:38px 0 120px;color:rgba(255,255,255,.6);font-size:13.5px;background:#0C0E0C}.footer .container{display:grid;gap:10px}.footer b{font-family:var(--disp);letter-spacing:.14em;color:#fff;font-size:18px}.footer a{color:rgba(255,255,255,.82)}.dock{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;display:flex;gap:10px;padding:10px;border-radius:999px;background:rgba(16,18,16,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.24);box-shadow:0 18px 40px -16px rgba(0,0,0,.8)}.dock .btn{min-height:52px;flex:1;padding:0 18px;font-size:15px}.dock .ico{flex:none;width:52px;min-height:52px;padding:0;color:var(--oak-hi);border:1.5px solid rgba(255,255,255,.38);border-radius:50%;background:transparent;display:grid;place-items:center}
 .modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(9,11,9,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s ease,visibility .25s ease}
 .modal.open{opacity:1;visibility:visible;pointer-events:auto}
-.modal .box{width:100%;max-width:480px;background:var(--paper);border-radius:26px;padding:26px 22px;position:relative;box-shadow:0 40px 80px -30px #000;margin:auto}.mapwrap{position:relative;display:block;width:100%;height:300px;margin-top:20px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:#E6E0D6}.mapwrap iframe{display:block;width:100%;height:300px;min-height:300px;border:0}
-@media (min-width:960px){.mapwrap,.mapwrap iframe{height:380px;min-height:380px}}
-.modal h3{font-family:var(--disp);font-weight:700;text-transform:uppercase;font-size:30px;line-height:1.05}.modal .sub{font-size:14.5px;color:var(--muted);margin-top:8px}.modal .x{position:absolute;top:12px;right:12px;width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);background:transparent;font-size:22px;line-height:1;color:var(--ink)}
+.modal .box{width:100%;max-width:480px;background:var(--paper);border-radius:26px;padding:26px 22px;position:relative;box-shadow:0 40px 80px -30px #000;margin:auto}.modal h3{font-family:var(--disp);font-weight:700;text-transform:uppercase;font-size:30px;line-height:1.05}.modal .sub{font-size:14.5px;color:var(--muted);margin-top:8px}.modal .x{position:absolute;top:12px;right:12px;width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);background:transparent;font-size:22px;line-height:1;color:var(--ink)}
 @media (min-width:640px){.hero-btns{grid-template-columns:auto auto;justify-content:start}}
 @media (min-width:960px){:root{--pad:40px}.section{padding:120px 0}.nav{display:flex}.burger{display:none}.brand{flex:0 0 auto;margin-right:auto}.header .tel{display:inline-flex;margin-left:26px;min-height:46px;padding:0 22px;font-size:14.5px}.dock{display:none}.hero{padding:0 0 124px;min-height:100vh;display:flex;align-items:center}.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:56px;align-items:center;padding:120px 40px 0;width:100%;max-width:1200px;margin:0 auto}.hero-photo{order:2;padding-top:0;border-radius:var(--r);overflow:hidden;border:1px solid rgba(255,255,255,.22);box-shadow:0 40px 80px -30px #000}.hero-photo::after{display:none}.hero-content{order:1;margin-top:0;padding:0}.hero h1{font-size:clamp(52px,5.4vw,82px)}.h2{font-size:clamp(56px,6vw,84px)}.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start}.rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:48px}.kgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.kgrid .wide{grid-column:span 2;grid-row:span 2;aspect-ratio:auto}.gal{padding-left:max(40px,calc((100vw - 1200px)/2 + 40px))}.slide{flex-basis:400px}.steps{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.step{flex-direction:column}.revs{padding-left:max(40px,calc((100vw - 1200px)/2 + 40px))}.rev{flex-basis:360px}.footer{padding-bottom:56px}.footer .container{grid-template-columns:1fr auto;align-items:center}}
 body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 25%)!important}
@@ -202,12 +183,12 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <button class="btn btn-oak" type="button" data-modal-open onclick="return openLead();">Оставить заявку на просчёт</button>
     <a class="btn btn-glass" href="tel:+79180892254"><?= $phoneBtn ?> +7 (918) 089-22-54</a>
   </div>
-  <p>г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2, 2 этаж · пн–сб 9:00–17:00</p>
+  <p>г. Краснодар, ул. Конечная 2, 2 этаж · пн–сб 9:00–17:00</p>
 </div></div>
 
 <main id="top">
 <section class="hero"><div class="wrap">
-  <div class="hero-photo"><img src="<?= e($slotPhoto('hero', 0)) ?>" alt="Кухня на заказ" width="960" height="1195" style="object-fit:cover;aspect-ratio:4/5;object-position:center 40%"></div>
+  <div class="hero-photo"><img src="<?= e($photo(0)) ?>" alt="Шкаф-прихожая в матовом фасаде и дубе" width="960" height="1195"></div>
   <div class="hero-content container">
     <p class="kick">Кухни · Шкафы · Прихожие</p>
     <h1>Мебель на заказ<em>в Краснодаре</em></h1>
@@ -250,7 +231,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
 <div class="gal">
   <?php foreach ($slides as $i => $title): ?>
   <div class="slide">
-    <img src="<?= e($slotPhoto('g' . ($i + 1), $i + 1)) ?>" alt="<?= e($title) ?>" loading="<?= $i === 0 ? 'eager' : 'lazy' ?>">
+    <img src="<?= e($photo($i + 1)) ?>" alt="<?= e($title) ?>" loading="<?= $i === 0 ? 'eager' : 'lazy' ?>">
   </div>
   <?php endforeach; ?>
 </div>
@@ -279,11 +260,11 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
   <h2 class="h2">Кухни<em>на заказ</em></h2>
   <div class="kgrid">
     <figure class="wide">
-      <img src="<?= e($slotPhoto('k1', 10)) ?>" alt="Угловая кухня в белом и графитовом" loading="lazy">
+      <img src="<?= e($photo(10)) ?>" alt="Угловая кухня в белом и графитовом" loading="lazy">
       <div class="kprice"><small>Под ключ</small><b>от 100 тыс. ₽</b><span>Проект, материалы, фурнитура и монтаж</span></div>
     </figure>
-    <figure><img src="<?= e($slotPhoto('k2', 11)) ?>" alt="Кухня с деревянной столешницей" loading="lazy"></figure>
-    <figure><img src="<?= e($slotPhoto('k3', 12)) ?>" alt="Кухня с фрезерованными фасадами" loading="lazy"></figure>
+    <figure><img src="<?= e($photo(11)) ?>" alt="Кухня с деревянной столешницей" loading="lazy"></figure>
+    <figure><img src="<?= e($photo(12)) ?>" alt="Кухня с фрезерованными фасадами" loading="lazy"></figure>
     <figure><img src="<?= e($photo(13)) ?>" alt="Кухня с встроенной техникой" loading="lazy"></figure>
     <figure><img src="<?= e($photo(14)) ?>" alt="Кухня с подсветкой рабочей зоны" loading="lazy"></figure>
   </div>
@@ -338,25 +319,14 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <?php endforeach; ?>
   </ul>
   <div class="mapbtns">
-    <a href="<?= e($mapYandex) ?>" target="_blank" rel="noopener">Яндекс Карты</a>
-    <a href="<?= e($map2gis) ?>" target="_blank" rel="noopener">2ГИС</a>
-  </div>
-  <div class="mapwrap">
-    <iframe
-      src="<?= e($mapWidget) ?>"
-      title="Карта: <?= e($address) ?>"
-      width="100%"
-      height="300"
-      frameborder="0"
-      allowfullscreen
-      loading="lazy"
-      referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <a href="https://yandex.ru/maps/?text=<?= rawurlencode('Краснодар, улица Конечная, 2') ?>" target="_blank" rel="noopener">Яндекс Карты</a>
+    <a href="https://2gis.ru/krasnodar/search/<?= rawurlencode('Конечная 2') ?>" target="_blank" rel="noopener">2ГИС</a>
   </div>
 </div></section>
 </main>
 
 <footer class="footer"><div class="container">
-  <div><b>MEBELS.KRD</b><div>Кухни, шкафы и мебель на заказ · <?= e($address) ?></div></div>
+  <div><b>MEBELS.KRD</b><div>Кухни, шкафы и мебель на заказ · Краснодар, ул. Конечная 2, 2 этаж</div></div>
   <div><a href="tel:+79180892254">+7 (918) 089-22-54</a> · пн–сб 9:00–17:00 · © <?= date('Y') ?></div>
 </div></footer>
 
