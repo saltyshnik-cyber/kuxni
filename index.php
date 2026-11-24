@@ -317,8 +317,18 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <?php endforeach; ?>
   </ul>
   <div class="mapbtns">
-    <a href="https://yandex.ru/maps/?text=<?= rawurlencode('Краснодар, улица Конечная, 2') ?>" target="_blank" rel="noopener">Яндекс Карты</a>
+    <a href="https://yandex.ru/maps/?text=<?= rawurlencode($mapQuery) ?>" target="_blank" rel="noopener">Яндекс Карты</a>
     <a href="https://2gis.ru/krasnodar/search/<?= rawurlencode('Конечная 2') ?>" target="_blank" rel="noopener">2ГИС</a>
+  </div>
+  <div class="mapframe">
+    <iframe
+      src="https://yandex.ru/map-widget/v1/?ll=38.974837%2C45.095560&z=16&pt=38.974837%2C45.095560%2Cpm2rdm"
+      width="100%"
+      height="320"
+      frameborder="0"
+      allowfullscreen
+      loading="lazy"
+      title="Шоурум Mebels.krd на карте Краснодара"></iframe>
   </div>
 </div></section>
 </main>
