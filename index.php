@@ -193,7 +193,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <button class="btn btn-oak" type="button" data-modal-open onclick="return openLead();">Оставить заявку на просчёт</button>
     <a class="btn btn-glass" href="tel:+79180892254"><?= $phoneBtn ?> +7 (918) 089-22-54</a>
   </div>
-  <p>г. Краснодар, ул. Конечная 2, 2 этаж · пн–сб 9:00–17:00</p>
+  <p>г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2, 2 этаж · пн–сб 9:00–17:00</p>
 </div></div>
 
 <main id="top">
