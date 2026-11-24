@@ -582,7 +582,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="pcard" data-slot="<?= e($slot) ?>">
         <div class="pic">
           <?php if ($current !== ''): ?>
-          <img src="<?= e($current) ?>" alt="<?= e(PHOTO_SLOTS[$slot]) ?>" loading="lazy" decoding="async">
+          <img src="<?= e($current . '?v=' . (@filemtime(APP_ROOT . '/' . $current) ?: time())) ?>" alt="<?= e(PHOTO_SLOTS[$slot]) ?>" loading="lazy" decoding="async">
           <?php else: ?>
           <div class="empty">Фото не задано</div>
           <?php endif; ?>
