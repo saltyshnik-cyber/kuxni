@@ -337,7 +337,7 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
   </div>
   <div class="mapframe">
     <iframe
-      src="https://yandex.ru/map-widget/v1/?ll=38.974837%2C45.095560&z=16&pt=38.974837%2C45.095560%2Cpm2rdm"
+      src="https://yandex.ru/map-widget/v1/?um=constructor&ll=38.977200%2C45.095100&z=17&pt=38.977200%2C45.095100%2Cpm2rdl"
       width="100%"
       height="320"
       frameborder="0"
