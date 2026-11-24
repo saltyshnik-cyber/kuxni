@@ -329,9 +329,10 @@ body{background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1p
     <?php endforeach; ?>
   </ul>
   <div class="mapbtns">
-    <a href="https://yandex.ru/maps/?text=<?= rawurlencode('Краснодар, улица Конечная, 2') ?>" target="_blank" rel="noopener">Яндекс Карты</a>
-    <a href="https://2gis.ru/krasnodar/search/<?= rawurlencode('Конечная 2') ?>" target="_blank" rel="noopener">2ГИС</a>
+    <a href="https://yandex.ru/maps/org/kr_mebel/57810645149/" target="_blank" rel="noopener">Яндекс Карты</a>
+    <a href="https://2gis.ru/krasnodar/firm/70000001038076121" target="_blank" rel="noopener">2ГИС</a>
   </div>
+  <iframe src="https://yandex.ru/map-widget/v1/?ll=38.977200%2C45.095100&amp;z=17&amp;pt=38.977200%2C45.095100%2Cpm2rdl" title="КР Мебель на карте" width="100%" height="320" style="width:100%;height:320px;border:0;border-radius:var(--r);margin-top:20px;display:block" loading="lazy" allowfullscreen></iframe>
 </div></section>
 </main>
 
