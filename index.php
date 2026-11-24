@@ -14,7 +14,22 @@ $fallbackPhoto = 'data:image/svg+xml;charset=utf-8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#26302A"/></svg>'
 );
 
-$photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $realPhotos[$i % count($realPhotos)];
+$slotPaths = page_photos(content());
+
+/** Номер места на странице -> слот фото из админки. Остальные места берут файлы из uploads/. */
+$photoSlots = [0 => 'hero', 1 => 'g1', 2 => 'g2', 3 => 'g3', 4 => 'g4', 5 => 'g5', 10 => 'k1', 11 => 'k2', 12 => 'k3'];
+
+$versioned = static fn(string $path): string
+    => $path . '?v=' . (@filemtime(__DIR__ . '/' . ltrim($path, '/')) ?: time());
+
+$photo = static function (int $i) use ($slotPaths, $photoSlots, $realPhotos, $fallbackPhoto, $versioned): string {
+    $slotPath = $slotPaths[$photoSlots[$i] ?? ''] ?? '';
+    if ($slotPath !== '') {
+        return $versioned($slotPath);
+    }
+
+    return $realPhotos === [] ? $fallbackPhoto : $versioned($realPhotos[$i % count($realPhotos)]);
+};
 
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
