@@ -64,16 +64,14 @@ $steps = [
     ['Производство', 'Изготавливаем на своём производстве и монтируем под ключ.'],
 ];
 
-$tgLink  = 'https://t.me/mebelksenia';
-$maxLink = 'https://max.ru/join/xEeoDDhU2G2bR1lqYRZg-p_gDBuGMLP5OIYbeS7Rm9g';
+$tgLink = 'https://t.me/mebelksenia';
 
 $contacts = [
     ['Ксения · менеджер', '+7 (918) 089-22-54', 'tel:+79180892254', 'phone'],
     ['Telegram', '@mebelksenia', $tgLink, 'tg'],
     ['Instagram', '@mebels.krd', 'https://www.instagram.com/mebels.krd', 'ig'],
-    ['MAX', 'мессенджер', $maxLink, 'max'],
     ['Pinterest', 'наши проекты', 'https://www.pinterest.com/', 'pin'],
-    ['Адрес', 'г. Краснодар, ул. Конечная 2, 2 этаж', 'https://yandex.ru/maps/?text=' . rawurlencode('Краснодар, улица Конечная, 2'), 'map'],
+    ['Адрес', 'г. Краснодар, мкр. 2-я Площадка, ул. Конечная, 2, 2 этаж', 'https://yandex.ru/maps/?text=' . rawurlencode('Краснодар, улица Конечная, 2'), 'map'],
 ];
 
 $icon = static function (string $key): string {
