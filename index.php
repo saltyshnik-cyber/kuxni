@@ -68,6 +68,7 @@ $icon = static function (string $key): string {
         'tg'    => '<path d="M22 3 2 10.5l6 2.5L10 19l3-4 5 4Z"/>',
         'ig'    => '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r=".6" fill="currentColor"/>',
         'max'   => '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+        'max'   => '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
         'pin'   => '<circle cx="12" cy="12" r="9"/><path d="M10 21l2-8"/>',
         'map'   => '<path d="M3 11 22 2l-9 19-2-8Z"/>',
     ];
