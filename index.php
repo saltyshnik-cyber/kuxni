@@ -14,7 +14,20 @@ $fallbackPhoto = 'data:image/svg+xml;charset=utf-8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#26302A"/></svg>'
 );
 
-$photo = static fn(int $i): string => $realPhotos === [] ? $fallbackPhoto : $realPhotos[$i % count($realPhotos)];
+$pagePhotos  = page_photos(content());
+$slotByIndex = [0 => 'hero', 1 => 'g1', 2 => 'g2', 3 => 'g3', 4 => 'g4', 5 => 'g5', 10 => 'k1', 11 => 'k2', 12 => 'k3'];
+
+$photo = static function (int $i) use ($pagePhotos, $slotByIndex, $realPhotos, $fallbackPhoto): string {
+    $path = $pagePhotos[$slotByIndex[$i] ?? ''] ?? '';
+    if ($path === '' && $realPhotos !== []) {
+        $path = $realPhotos[$i % count($realPhotos)];
+    }
+    if ($path === '') {
+        return $fallbackPhoto;
+    }
+
+    return $path . '?v=' . (@filemtime(__DIR__ . '/' . ltrim($path, '/')) ?: time());
+};
 
 $slides = [
     'Шкаф-прихожая, матовый фасад и дерево',
